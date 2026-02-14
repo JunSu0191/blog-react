@@ -32,7 +32,7 @@ function ToolbarGroup({ children, className }: ToolbarGroupProps) {
   return (
     <div
       className={[
-        "flex shrink-0 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white/90 p-1.5 shadow-[0_10px_22px_-20px_rgba(15,23,42,0.7)]",
+        "flex shrink-0 items-center gap-1.5 rounded-2xl border border-slate-200 bg-white/90 p-1.5 shadow-[0_10px_22px_-20px_rgba(15,23,42,0.7)] dark:border-slate-700 dark:bg-slate-900/90 dark:shadow-[0_16px_30px_-22px_rgba(2,6,23,0.9)]",
         className ?? "",
       ].join(" ")}
     >
@@ -60,7 +60,7 @@ function ToolbarButton({
         "disabled:cursor-not-allowed disabled:opacity-50",
         active
           ? "bg-blue-600 text-white shadow-[0_10px_24px_-12px_rgba(37,99,235,0.8)]"
-          : "bg-white text-slate-700 hover:bg-slate-100",
+          : "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800",
       ].join(" ")}
     >
       {label}
@@ -191,7 +191,7 @@ export default function RichTextEditor({
       editorProps: {
         attributes: {
           class:
-            "toss-editor-content prose prose-slate max-w-none min-h-[240px] max-w-full break-words px-4 py-4 text-base leading-7 focus:outline-none sm:min-h-[340px] sm:px-6 sm:py-5",
+            "toss-editor-content prose prose-slate max-w-none min-h-[240px] max-w-full break-words px-4 py-4 text-base leading-7 focus:outline-none dark:prose-invert dark:text-slate-100 sm:min-h-[340px] sm:px-6 sm:py-5",
         },
         handlePaste: handlePasteImage,
         handleDrop: handleDropImage,
@@ -235,15 +235,15 @@ export default function RichTextEditor({
 
   if (!editor) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-slate-500">
+      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-8 text-center text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
         에디터를 불러오는 중...
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_24px_64px_-42px_rgba(15,23,42,0.45)]">
-      <div className="w-full max-w-full border-b border-slate-200 bg-slate-50/70 px-2.5 py-2.5 sm:px-3 sm:py-3">
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_24px_64px_-42px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_28px_70px_-48px_rgba(2,6,23,0.9)]">
+      <div className="w-full max-w-full border-b border-slate-200 bg-slate-50/70 px-2.5 py-2.5 dark:border-slate-700 dark:bg-slate-800/70 sm:px-3 sm:py-3">
         <div className="flex w-full max-w-full min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <ToolbarGroup>
             <ToolbarButton
@@ -321,7 +321,7 @@ export default function RichTextEditor({
               variant="secondary"
               onClick={addImage}
               disabled={isUploading}
-              className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs sm:h-9 sm:rounded-xl sm:px-3 sm:text-sm"
+              className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:h-9 sm:rounded-xl sm:px-3 sm:text-sm"
             >
               이미지
             </Button>
@@ -340,7 +340,7 @@ export default function RichTextEditor({
               variant="secondary"
               onClick={() => editor.chain().focus().undo().run()}
               disabled={!editor.can().undo()}
-              className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs sm:h-9 sm:rounded-xl sm:px-3 sm:text-sm"
+              className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:h-9 sm:rounded-xl sm:px-3 sm:text-sm"
             >
               실행취소
             </Button>
@@ -350,34 +350,34 @@ export default function RichTextEditor({
               variant="secondary"
               onClick={() => editor.chain().focus().redo().run()}
               disabled={!editor.can().redo()}
-              className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs sm:h-9 sm:rounded-xl sm:px-3 sm:text-sm"
+              className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:h-9 sm:rounded-xl sm:px-3 sm:text-sm"
             >
               다시실행
             </Button>
           </ToolbarGroup>
         </div>
-        <p className="mt-1 pl-0.5 text-[11px] text-slate-500 sm:hidden">
+        <p className="mt-1 pl-0.5 text-[11px] text-slate-500 dark:text-slate-400 sm:hidden">
           툴바를 좌우로 스와이프해서 추가 기능을 사용할 수 있습니다.
         </p>
       </div>
 
-      <div className="max-w-full overflow-x-hidden bg-white">
+      <div className="max-w-full overflow-x-hidden bg-white dark:bg-slate-950">
         <EditorContent editor={editor} />
       </div>
 
-      <div className="border-t border-slate-200 bg-slate-50/80 px-3 py-2.5 sm:px-6 sm:py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+      <div className="border-t border-slate-200 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800/75 sm:px-6 sm:py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-300">
           <span className="leading-relaxed">
             TipTap Editor · 이미지 붙여넣기/드롭 업로드 · 실시간 편집
           </span>
-          <span className="rounded-full bg-white px-3 py-1 font-semibold text-slate-700">
+          <span className="rounded-full bg-white px-3 py-1 font-semibold text-slate-700 dark:bg-slate-900 dark:text-slate-200">
             {textCount.toLocaleString()}자
           </span>
         </div>
 
         {isUploading && (
           <div className="mt-3">
-            <div className="h-2.5 overflow-hidden rounded-full bg-slate-200">
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-[width] duration-300"
                 style={{ width: `${Math.max(progress, 4)}%` }}
@@ -390,7 +390,7 @@ export default function RichTextEditor({
         )}
 
         {error && !isUploading && (
-          <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+          <p className="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
             업로드 오류: {error.message}
           </p>
         )}

@@ -1,6 +1,9 @@
-import React from "react";
+import { useId, type InputHTMLAttributes } from "react";
+import { Input as ShadcnInput } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/shared/lib/cn";
 
-type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
+type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   label?: string;
   error?: string | null;
   hint?: string;
@@ -14,41 +17,44 @@ export default function Input({
   id,
   ...props
 }: InputProps) {
-  const inputId = id || `input-${Math.random}`;
+  const generatedId = useId();
+  const inputId = id || generatedId;
+  const describedBy = error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined;
 
   return (
     <div className="w-full">
       {label && (
-        <label
+        <Label
           htmlFor={inputId}
-          className="block text-sm font-medium text-slate-700 mb-2"
+          className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300"
         >
           {label}
-        </label>
+        </Label>
       )}
-      <input
+      <ShadcnInput
         id={inputId}
-        className={`
-          w-full px-4 py-2.5 text-base
-          bg-white border border-slate-200
-          rounded-lg
-          transition-all duration-200
-          focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
-          hover:border-slate-300
-          placeholder:text-slate-400
-          disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200
-          ${
-            error
-              ? "border-red-500 focus:ring-red-500/20 focus:border-red-500"
-              : ""
-          }
-          ${className ?? ""}
-        `}
+        aria-invalid={Boolean(error)}
+        aria-describedby={describedBy}
+        className={cn(
+          "h-11 rounded-xl border-slate-200 bg-white/95 px-3 text-sm text-slate-900 shadow-sm transition-all placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100 dark:placeholder:text-slate-500",
+          error
+            ? "border-rose-500 focus-visible:border-rose-500 focus-visible:ring-rose-500/20 dark:border-rose-500"
+            : "focus-visible:border-blue-500 dark:focus-visible:border-blue-400",
+          className,
+        )}
         style={{ textTransform: "none" }}
         {...props}
       />
-      {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
-      {hint && !error && <p className="text-sm text-slate-500 mt-1">{hint}</p>}
+      {error && (
+        <p id={`${inputId}-error`} className="mt-1 text-sm text-rose-600 dark:text-rose-400">
+          {error}
+        </p>
+      )}
+      {hint && !error && (
+        <p id={`${inputId}-hint`} className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

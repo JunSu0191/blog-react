@@ -1,4 +1,13 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import {
+  Table as ShadcnTable,
+  TableBody as ShadcnTableBody,
+  TableCell as ShadcnTableCell,
+  TableHead as ShadcnTableHeadCell,
+  TableHeader as ShadcnTableHeaderSection,
+  TableRow as ShadcnTableRow,
+} from "@/components/ui/table";
+import { cn } from "@/shared/lib/cn";
 
 // Table Root
 interface TableProps extends HTMLAttributes<HTMLTableElement> {
@@ -7,13 +16,13 @@ interface TableProps extends HTMLAttributes<HTMLTableElement> {
 
 export function Table({ children, className = "", ...props }: TableProps) {
   return (
-    <div className="overflow-x-auto">
-      <table
-        className={`min-w-full divide-y divide-gray-200 ${className}`}
+    <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/95 shadow-sm dark:border-slate-800/80 dark:bg-slate-900/90">
+      <ShadcnTable
+        className={cn("min-w-full divide-y divide-slate-200/70 dark:divide-slate-800/70", className)}
         {...props}
       >
         {children}
-      </table>
+      </ShadcnTable>
     </div>
   );
 }
@@ -29,9 +38,9 @@ export function TableHead({
   ...props
 }: TableHeadProps) {
   return (
-    <thead className={`bg-gray-50 ${className}`} {...props}>
+    <ShadcnTableHeaderSection className={cn("bg-slate-50/80 dark:bg-slate-900/70", className)} {...props}>
       {children}
-    </thead>
+    </ShadcnTableHeaderSection>
   );
 }
 
@@ -46,12 +55,12 @@ export function TableBody({
   ...props
 }: TableBodyProps) {
   return (
-    <tbody
-      className={`bg-white divide-y divide-gray-200 ${className}`}
+    <ShadcnTableBody
+      className={cn("divide-y divide-slate-200/60 bg-white/95 dark:divide-slate-800/70 dark:bg-slate-950/60", className)}
       {...props}
     >
       {children}
-    </tbody>
+    </ShadcnTableBody>
   );
 }
 
@@ -66,12 +75,12 @@ export function TableRow({
   ...props
 }: TableRowProps) {
   return (
-    <tr
-      className={`hover:bg-gray-50 transition-colors duration-200 ${className}`}
+    <ShadcnTableRow
+      className={cn("transition-colors duration-200 hover:bg-slate-50/80 dark:hover:bg-slate-900/70", className)}
       {...props}
     >
       {children}
-    </tr>
+    </ShadcnTableRow>
   );
 }
 
@@ -86,12 +95,15 @@ export function TableHeader({
   ...props
 }: TableHeaderProps) {
   return (
-    <th
-      className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${className}`}
+    <ShadcnTableHeadCell
+      className={cn(
+        "h-auto px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400",
+        className,
+      )}
       {...props}
     >
       {children}
-    </th>
+    </ShadcnTableHeadCell>
   );
 }
 
@@ -106,12 +118,12 @@ export function TableCell({
   ...props
 }: TableCellProps) {
   return (
-    <td
-      className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${className}`}
+    <ShadcnTableCell
+      className={cn("whitespace-nowrap px-6 py-4 text-sm text-slate-900 dark:text-slate-100", className)}
       {...props}
     >
       {children}
-    </td>
+    </ShadcnTableCell>
   );
 }
 

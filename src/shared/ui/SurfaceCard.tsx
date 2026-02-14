@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/shared/lib/cn";
 
 type SurfaceCardProps = {
   children: ReactNode;
@@ -19,14 +21,14 @@ export default function SurfaceCard({
   padded = "md",
 }: SurfaceCardProps) {
   return (
-    <section
-      className={[
-        "rounded-3xl border border-slate-200/80 bg-white shadow-[0_22px_54px_-44px_rgba(15,23,42,0.35)]",
+    <Card
+      className={cn(
+        "rounded-3xl border-slate-200/80 bg-white/95 shadow-[0_24px_60px_-44px_rgba(15,23,42,0.35)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-[0_24px_70px_-46px_rgba(2,6,23,0.7)]",
         paddingClasses[padded],
-        className ?? "",
-      ].join(" ")}
+        className,
+      )}
     >
       {children}
-    </section>
+    </Card>
   );
 }

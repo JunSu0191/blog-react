@@ -1,50 +1,85 @@
-import React from "react";
+import { Loader2 } from "lucide-react";
+import type { ComponentProps, ReactNode } from "react";
+import {
+  Button as ShadcnButton,
+  buttonVariants as shadcnButtonVariants,
+  type ButtonProps as ShadcnButtonProps,
+} from "@/components/ui/button";
+import { cn } from "@/shared/lib/cn";
 
-type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "outline";
-  size?: "sm" | "md" | "lg";
-  isLoading?: boolean;
-  children: React.ReactNode;
+type LegacyVariant = "primary" | "secondary" | "ghost" | "outline";
+type LegacySize = "sm" | "md" | "lg" | "icon";
+
+const variantMap: Record<LegacyVariant, NonNullable<ShadcnButtonProps["variant"]>> = {
+  primary: "brand",
+  secondary: "secondary",
+  ghost: "ghost",
+  outline: "outline",
 };
 
-export default function Button({
+const sizeMap: Record<LegacySize, NonNullable<ShadcnButtonProps["size"]>> = {
+  sm: "sm",
+  md: "default",
+  lg: "lg",
+  icon: "icon",
+};
+
+export function buttonVariants({
   variant = "primary",
   size = "md",
+  className,
+}: {
+  variant?: LegacyVariant;
+  size?: LegacySize;
+  className?: string;
+} = {}) {
+  return cn(
+    shadcnButtonVariants({
+      variant: variantMap[variant],
+      size: sizeMap[size],
+    }),
+    "rounded-xl font-semibold transition-all duration-200",
+    className,
+  );
+}
+
+type ButtonProps = Omit<ComponentProps<typeof ShadcnButton>, "variant" | "size"> & {
+    variant?: LegacyVariant;
+    size?: LegacySize;
+    isLoading?: boolean;
+    loadingText?: ReactNode;
+    children: ReactNode;
+  };
+
+export default function Button({
+  variant,
+  size,
   isLoading = false,
+  loadingText = "로딩 중...",
   className,
   disabled,
   children,
   ...props
 }: ButtonProps) {
-  const baseStyle =
-    "font-medium transition-all duration-200 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
-
-  const variants = {
-    primary:
-      "bg-blue-600 text-white shadow-[0_12px_24px_-14px_rgba(37,99,235,0.8)] hover:bg-blue-700 focus-visible:ring-blue-500",
-    secondary:
-      "bg-slate-100 text-slate-800 hover:bg-slate-200 focus-visible:ring-slate-400",
-    ghost:
-      "bg-transparent text-slate-600 hover:bg-slate-100 focus-visible:ring-slate-400",
-    outline:
-      "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 focus-visible:ring-gray-400",
-  };
-
-  const sizes = {
-    sm: "px-3 py-1.5 text-sm",
-    md: "px-4 py-2.5 text-base",
-    lg: "px-6 py-3 text-lg",
-  };
-
   return (
-    <button
-      className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${
-        className ?? ""
-      }`}
+    <ShadcnButton
+      variant={variantMap[variant || "primary"]}
+      size={sizeMap[size || "md"]}
+      className={cn(
+        "rounded-xl font-semibold transition-all duration-200",
+        className,
+      )}
       disabled={disabled || isLoading}
       {...props}
     >
-      {isLoading ? "로딩 중..." : children}
-    </button>
+      {isLoading ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>{loadingText}</span>
+        </>
+      ) : (
+        children
+      )}
+    </ShadcnButton>
   );
 }
