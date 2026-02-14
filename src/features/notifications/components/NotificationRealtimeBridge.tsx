@@ -195,6 +195,13 @@ export default function NotificationRealtimeBridge() {
       : getUserId() ?? getUserIdFromToken(effectiveToken) ?? undefined;
 
   useEffect(() => {
+    if (effectiveToken) return;
+    isInitialLoadRef.current = false;
+    seenNotificationIdsRef.current.clear();
+    recentToastDedupeRef.current.clear();
+  }, [effectiveToken]);
+
+  useEffect(() => {
     if (!effectiveToken) {
       console.warn("[notifications] realtime disabled: no token");
       return;
@@ -208,6 +215,18 @@ export default function NotificationRealtimeBridge() {
     const unsubscribe = subscribeNotifications((payload) => {
       const extracted = extractNotification(payload);
       if (!extracted) return;
+
+      // 초기 동기화 전에는 과거 알림으로 인한 토스트 스팸을 막고 기준선만 수집한다.
+      if (!isInitialLoadRef.current) {
+        if (extracted.item) {
+          seenNotificationIdsRef.current.add(extracted.item.id);
+        }
+        const bootstrappingKeys = collectDedupeKeys(extracted.item, extracted.dedupeSignature);
+        if (bootstrappingKeys.length > 0) {
+          rememberDedupeKeys(recentToastDedupeRef.current, bootstrappingKeys);
+        }
+        return;
+      }
 
       // id가 없어도 토스트는 즉시 노출하고, 목록은 서버 재조회로 동기화한다.
       if (!extracted.item) {
@@ -301,6 +320,9 @@ export default function NotificationRealtimeBridge() {
   }, [effectiveToken, queryClient]);
 
   useEffect(() => {
+    if (!effectiveToken) return;
+    if (!notificationData || !Array.isArray(notificationData.pages)) return;
+
     const latestItems = notificationData?.pages?.[0]?.items || [];
 
     if (!isInitialLoadRef.current) {
@@ -330,7 +352,7 @@ export default function NotificationRealtimeBridge() {
       const content = toNotificationContent(item);
       showToast(content.title || content.body || "새 알림이 도착했습니다.", getToastLevel(item));
     });
-  }, [notificationData?.pages, showToast]);
+  }, [effectiveToken, notificationData, showToast]);
 
   return null;
 }
