@@ -96,11 +96,11 @@ export default function PostDetailPage() {
 
   return (
     <article className="route-enter space-y-6">
-      <header className="overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white p-7 shadow-[0_26px_70px_-46px_rgba(15,23,42,0.7)] sm:p-8">
+      <header className="overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white p-7 shadow-[0_26px_70px_-46px_rgba(15,23,42,0.7)] sm:p-8 dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_26px_70px_-46px_rgba(2,6,23,0.88)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
             to="/posts"
-            className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
+            className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             ← 목록으로
           </Link>
@@ -113,7 +113,7 @@ export default function PostDetailPage() {
                 "rounded-xl border px-3 py-1.5 text-sm font-semibold transition",
                 isBookmarked
                   ? "border-amber-300 bg-amber-50 text-amber-700"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
               ].join(" ")}
             >
               {isBookmarked ? "북마크됨" : "북마크"}
@@ -121,42 +121,42 @@ export default function PostDetailPage() {
             <button
               type="button"
               onClick={() => void sharePost(post.title, window.location.href)}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               공유
             </button>
           </div>
         </div>
 
-        <h1 className="mt-6 text-3xl font-black leading-tight tracking-tight text-slate-900 sm:text-5xl">
+        <h1 className="mt-6 text-3xl font-black leading-tight tracking-tight text-slate-900 dark:text-slate-100 sm:text-5xl">
           {post.title}
         </h1>
 
-        <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">{plainSummary}</p>
+        <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300 sm:text-base">{plainSummary}</p>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-4">
-          <div className="rounded-2xl bg-slate-50 p-3.5">
-            <p className="text-[11px] font-semibold text-slate-500">작성자</p>
-            <p className="mt-1 text-sm font-bold text-slate-900">User {post.userId}</p>
+          <div className="rounded-2xl bg-slate-50 p-3.5 dark:bg-slate-800">
+            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">작성자</p>
+            <p className="mt-1 text-sm font-bold text-slate-900 dark:text-slate-100">User {post.userId}</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-3.5">
-            <p className="text-[11px] font-semibold text-slate-500">작성일</p>
-            <p className="mt-1 text-sm font-bold text-slate-900">{formatDate(post.createdAt)}</p>
+          <div className="rounded-2xl bg-slate-50 p-3.5 dark:bg-slate-800">
+            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">작성일</p>
+            <p className="mt-1 text-sm font-bold text-slate-900 dark:text-slate-100">{formatDate(post.createdAt)}</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-3.5">
-            <p className="text-[11px] font-semibold text-slate-500">예상 읽기</p>
-            <p className="mt-1 text-sm font-bold text-slate-900">{readTime}분</p>
+          <div className="rounded-2xl bg-slate-50 p-3.5 dark:bg-slate-800">
+            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">예상 읽기</p>
+            <p className="mt-1 text-sm font-bold text-slate-900 dark:text-slate-100">{readTime}분</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-3.5">
-            <p className="text-[11px] font-semibold text-slate-500">첨부</p>
-            <p className="mt-1 text-sm font-bold text-slate-900">{post.attachFiles?.length || 0}개</p>
+          <div className="rounded-2xl bg-slate-50 p-3.5 dark:bg-slate-800">
+            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">첨부</p>
+            <p className="mt-1 text-sm font-bold text-slate-900 dark:text-slate-100">{post.attachFiles?.length || 0}개</p>
           </div>
         </div>
       </header>
 
-      <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_24px_62px_-46px_rgba(15,23,42,0.75)]">
-        <div className="border-b border-slate-200 px-6 py-4">
-          <h2 className="text-sm font-bold text-slate-700">본문</h2>
+      <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_24px_62px_-46px_rgba(15,23,42,0.75)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_24px_62px_-46px_rgba(2,6,23,0.85)]">
+        <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+          <h2 className="text-sm font-bold text-slate-700 dark:text-slate-200">본문</h2>
         </div>
         <div className="toss-editor-content prose prose-slate max-w-none px-6 py-6 sm:px-10 sm:py-10">
           <div dangerouslySetInnerHTML={{ __html: post.content }} />
@@ -164,8 +164,8 @@ export default function PostDetailPage() {
       </section>
 
       {post.attachFiles && post.attachFiles.length > 0 && (
-        <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_24px_58px_-46px_rgba(15,23,42,0.6)]">
-          <h2 className="text-xl font-black tracking-tight text-slate-900">첨부 파일</h2>
+        <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_24px_58px_-46px_rgba(15,23,42,0.6)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_24px_58px_-46px_rgba(2,6,23,0.8)]">
+          <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-slate-100">첨부 파일</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {post.attachFiles.map((file) => {
               const downloadUrl = toDownloadUrl(file.url);
@@ -174,11 +174,11 @@ export default function PostDetailPage() {
               return (
                 <div
                   key={file.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-slate-800">{file.filename || "첨부파일"}</p>
-                    <p className="text-xs text-slate-500">파일 다운로드</p>
+                    <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">{file.filename || "첨부파일"}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">파일 다운로드</p>
                   </div>
                   {hasUrl ? (
                     <a
@@ -186,12 +186,12 @@ export default function PostDetailPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                       download={file.filename}
-                      className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                      className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                     >
                       다운로드
                     </a>
                   ) : (
-                    <span className="shrink-0 rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                    <span className="shrink-0 rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">
                       URL 없음
                     </span>
                   )}
@@ -202,8 +202,8 @@ export default function PostDetailPage() {
         </section>
       )}
 
-      <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_24px_58px_-46px_rgba(15,23,42,0.6)]">
-        <h2 className="text-xl font-black tracking-tight text-slate-900">댓글</h2>
+      <section className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_24px_58px_-46px_rgba(15,23,42,0.6)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_24px_58px_-46px_rgba(2,6,23,0.8)]">
+        <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-slate-100">댓글</h2>
         <div className="mt-4">
           <CommentList postId={postId} />
         </div>

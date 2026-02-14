@@ -1,4 +1,4 @@
-import { Input, SegmentedControl, SurfaceCard } from "@/shared/ui";
+import { Button, Input, SegmentedControl, SurfaceCard } from "@/shared/ui";
 
 type Category = "all" | "tech" | "daily" | "review";
 type ViewMode = "grid" | "list";
@@ -63,25 +63,28 @@ export default function PostFeedControls({
               }
             }}
             placeholder="제목/본문 키워드로 검색"
-            className="h-11 rounded-xl border-slate-200 pr-24"
+            className="h-11 rounded-xl border-slate-200 pr-24 dark:border-slate-700"
           />
           <div className="absolute right-1.5 top-1.5 flex items-center gap-1">
             {activeKeyword && (
-              <button
+              <Button
                 type="button"
                 onClick={onClearSearch}
-                className="h-8 rounded-lg px-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-100"
+                variant="ghost"
+                size="sm"
+                className="h-8 rounded-lg px-2 text-xs font-semibold text-slate-500 dark:text-slate-300"
               >
                 초기화
-              </button>
+              </Button>
             )}
-            <button
+            <Button
               type="button"
               onClick={onSearch}
-              className="h-8 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white transition hover:bg-blue-700"
+              size="sm"
+              className="h-8 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
             >
               검색
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -101,25 +104,27 @@ export default function PostFeedControls({
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {categories.map((category) => (
-          <button
+          <Button
             key={category.value}
             type="button"
+            size="sm"
+            variant={selectedCategory === category.value ? "primary" : "outline"}
             onClick={() => onCategoryChange(category.value)}
             className={[
-              "rounded-full border px-4 py-1.5 text-sm font-semibold transition-all",
+              "h-8 rounded-full px-4 text-sm font-semibold transition-all",
               selectedCategory === category.value
-                ? "border-blue-300 bg-blue-50 text-blue-700"
-                : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700",
+                ? "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100",
             ].join(" ")}
           >
             {category.label}
-          </button>
+          </Button>
         ))}
       </div>
 
       {activeKeyword && (
-        <p className="mt-3 text-xs font-semibold text-slate-500">
-          검색어: <span className="text-slate-700">"{activeKeyword}"</span>
+        <p className="mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400">
+          검색어: <span className="text-slate-700 dark:text-slate-200">"{activeKeyword}"</span>
         </p>
       )}
     </SurfaceCard>

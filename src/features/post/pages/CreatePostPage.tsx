@@ -34,9 +34,9 @@ const composeTabs: Array<{
   label: string;
   description: string;
 }> = [
-  { key: "write", label: "작성", description: "에디터" },
-  { key: "preview", label: "미리보기", description: "출판 형태" },
-  { key: "attachments", label: "첨부", description: "파일 관리" },
+  { key: "write", label: "작성", description: "내용 작성" },
+  { key: "preview", label: "미리보기", description: "완성 화면" },
+  { key: "attachments", label: "첨부", description: "파일 첨부" },
 ];
 
 const escapeHtml = (value: string) =>
@@ -350,17 +350,17 @@ export default function CreatePostPage() {
 
   return (
     <div className="relative mx-auto max-w-6xl overflow-x-hidden px-3 pb-32 pt-4 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-72 bg-[radial-gradient(circle_at_20%_10%,rgba(59,130,246,0.15),transparent_45%),radial-gradient(circle_at_85%_12%,rgba(99,102,241,0.12),transparent_38%)] sm:block" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-72 bg-[radial-gradient(circle_at_20%_10%,rgba(59,130,246,0.15),transparent_45%),radial-gradient(circle_at_85%_12%,rgba(99,102,241,0.12),transparent_38%)] dark:bg-[radial-gradient(circle_at_20%_10%,rgba(29,78,216,0.2),transparent_45%),radial-gradient(circle_at_85%_12%,rgba(67,56,202,0.2),transparent_38%)] sm:block" />
 
       <div className="mb-5 flex flex-col items-stretch gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-2 text-sm font-semibold text-blue-700">
             Story Studio
           </p>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-4xl">
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
             새 글 작성
           </h1>
-          <p className="mt-2 text-xs text-slate-600 sm:text-sm">
+          <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 sm:text-sm">
             토스 스타일의 빠른 편집 흐름으로 글, 첨부, 미리보기를 한 번에
             관리하세요.
           </p>
@@ -369,21 +369,21 @@ export default function CreatePostPage() {
           type="button"
           variant="ghost"
           onClick={() => navigate("/posts")}
-          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-5 sm:w-auto"
+          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
         >
           목록으로
         </Button>
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:hidden">
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-          <p className="text-[11px] font-semibold text-slate-500">본문 길이</p>
-          <p className="mt-1 text-sm font-bold text-slate-800">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">본문 길이</p>
+          <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">
             {plainContentText.length.toLocaleString()}자
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-          <p className="text-[11px] font-semibold text-slate-500">첨부 완료</p>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">첨부 완료</p>
           <p className="mt-1 text-sm font-bold text-emerald-700">
             {completeAttachmentCount}개
           </p>
@@ -395,10 +395,10 @@ export default function CreatePostPage() {
         className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
       >
         <div className="min-w-0 space-y-4 sm:space-y-6">
-          <section className="min-w-0 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_26px_64px_-44px_rgba(15,23,42,0.6)] sm:p-6">
+          <section className="min-w-0 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_26px_64px_-44px_rgba(15,23,42,0.6)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_30px_72px_-48px_rgba(2,6,23,0.85)] sm:p-6">
             <label
               htmlFor="title"
-              className="mb-2 block text-sm font-bold text-slate-700"
+              className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200"
             >
               제목
             </label>
@@ -410,17 +410,17 @@ export default function CreatePostPage() {
                 setFormData((prev) => ({ ...prev, title: event.target.value }))
               }
               placeholder="독자가 스크롤을 멈추게 할 제목을 입력하세요"
-              className="h-11 rounded-2xl border-slate-200 text-[16px] sm:h-12"
+              className="h-11 rounded-2xl border-slate-200 text-[16px] dark:border-slate-700 sm:h-12"
               maxLength={120}
               required
             />
           </section>
 
-          <section className="min-w-0 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_26px_64px_-44px_rgba(15,23,42,0.6)] sm:p-6">
-            <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl bg-slate-100 p-1.5 sm:mb-5">
+          <section className="min-w-0 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_26px_64px_-44px_rgba(15,23,42,0.6)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_30px_72px_-48px_rgba(2,6,23,0.85)] sm:p-6">
+            <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800/80 sm:mb-5">
               <div className="relative col-span-3 grid grid-cols-3 gap-2">
                 <span
-                  className="absolute inset-y-0 left-0 w-[calc((100%-1rem)/3)] rounded-xl bg-white shadow-[0_12px_24px_-16px_rgba(15,23,42,0.55)] transition-transform duration-300"
+                  className="absolute inset-y-0 left-0 w-[calc((100%-1rem)/3)] rounded-xl bg-white shadow-[0_12px_24px_-16px_rgba(15,23,42,0.55)] transition-transform duration-300 dark:bg-slate-900 dark:shadow-[0_14px_28px_-18px_rgba(2,6,23,0.9)]"
                   style={{
                     transform: `translateX(calc(${tabIndex} * (100% + 0.5rem)))`,
                   }}
@@ -433,8 +433,8 @@ export default function CreatePostPage() {
                     className={[
                       "relative z-10 rounded-xl px-2.5 py-2 text-center text-xs transition-colors sm:px-3 sm:text-sm",
                       activeTab === tab.key
-                        ? "font-bold text-slate-900"
-                        : "font-medium text-slate-500 hover:text-slate-700",
+                        ? "font-bold text-slate-900 dark:text-slate-100"
+                        : "font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
                     ].join(" ")}
                   >
                     <span className="block">{tab.label}</span>
@@ -450,7 +450,7 @@ export default function CreatePostPage() {
               <div className="animate-fade-in min-w-0 overflow-hidden">
                 <Suspense
                   fallback={
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm font-semibold text-slate-500">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
                       에디터를 준비하는 중...
                     </div>
                   }
@@ -467,9 +467,9 @@ export default function CreatePostPage() {
             )}
 
             {activeTab === "preview" && (
-              <div className="animate-fade-in rounded-3xl border border-slate-200 bg-slate-50/70 p-4 sm:p-6">
+              <div className="animate-fade-in rounded-3xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/70 sm:p-6">
                 {plainContentText.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
                     미리보기 내용이 없습니다. 작성 탭에서 본문을 입력해보세요.
                   </div>
                 ) : (
@@ -482,17 +482,17 @@ export default function CreatePostPage() {
             )}
 
             {activeTab === "attachments" && (
-              <div className="animate-fade-in rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-4 sm:p-5">
+              <div className="animate-fade-in rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/70 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-bold text-slate-800">
+                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
                       첨부파일 업로드
                     </h3>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       파일 선택 또는 Ctrl/Cmd+V 붙여넣기로 업로드됩니다.
                     </p>
                   </div>
-                  <label className="inline-flex cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100">
+                  <label className="inline-flex cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
                     파일 선택
                     <input
                       type="file"
@@ -505,7 +505,7 @@ export default function CreatePostPage() {
 
                 <div className="mt-4 space-y-3">
                   {attachments.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
                       아직 업로드한 파일이 없습니다.
                     </div>
                   )}
@@ -513,20 +513,20 @@ export default function CreatePostPage() {
                   {attachments.map((item) => (
                     <div
                       key={item.id}
-                      className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4"
+                      className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-800">
+                          <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
                             {item.file.name}
                           </p>
-                          <p className="mt-1 text-xs text-slate-500">
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                             {formatFileSize(item.file.size)}
                           </p>
 
                           {item.status === "uploading" && (
                             <div className="mt-2">
-                              <div className="h-1.5 rounded-full bg-slate-200">
+                              <div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-700">
                                 <div
                                   className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-[width] duration-300"
                                   style={{
@@ -563,7 +563,7 @@ export default function CreatePostPage() {
                                     item.downloadUrl || item.url,
                                   )
                                 }
-                                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-100 sm:w-auto"
+                                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
                               >
                                 링크
                               </button>
@@ -572,7 +572,7 @@ export default function CreatePostPage() {
                                 onClick={() =>
                                   insertAttachmentLinkToContent(item)
                                 }
-                                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-100 sm:w-auto"
+                                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
                               >
                                 본문삽입
                               </button>
@@ -582,7 +582,7 @@ export default function CreatePostPage() {
                             type="button"
                             onClick={() => removeAttachment(item.id)}
                             disabled={item.status === "uploading"}
-                            className="w-full rounded-lg border border-rose-100 bg-rose-50 px-2.5 py-1.5 font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                            className="w-full rounded-lg border border-rose-100 bg-rose-50 px-2.5 py-1.5 font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-950/60 sm:w-auto"
                           >
                             삭제
                           </button>
@@ -597,29 +597,29 @@ export default function CreatePostPage() {
         </div>
 
         <aside className="hidden space-y-4 lg:sticky lg:top-6 lg:block lg:h-fit">
-          <section className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_24px_56px_-44px_rgba(15,23,42,0.65)] sm:p-5">
-            <h2 className="text-sm font-bold text-slate-700">작성 상태</h2>
+          <section className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_24px_56px_-44px_rgba(15,23,42,0.65)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_26px_62px_-46px_rgba(2,6,23,0.88)] sm:p-5">
+            <h2 className="text-sm font-bold text-slate-700 dark:text-slate-200">작성 상태</h2>
             <div className="mt-3 space-y-2.5 text-sm">
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                <span className="text-slate-500">제목 길이</span>
-                <span className="font-bold text-slate-800">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
+                <span className="text-slate-500 dark:text-slate-400">제목 길이</span>
+                <span className="font-bold text-slate-800 dark:text-slate-100">
                   {formData.title.trim().length}자
                 </span>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                <span className="text-slate-500">본문 길이</span>
-                <span className="font-bold text-slate-800">
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
+                <span className="text-slate-500 dark:text-slate-400">본문 길이</span>
+                <span className="font-bold text-slate-800 dark:text-slate-100">
                   {plainContentText.length.toLocaleString()}자
                 </span>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                <span className="text-slate-500">첨부 완료</span>
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
+                <span className="text-slate-500 dark:text-slate-400">첨부 완료</span>
                 <span className="font-bold text-emerald-700">
                   {completeAttachmentCount}개
                 </span>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                <span className="text-slate-500">첨부 실패</span>
+              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
+                <span className="text-slate-500 dark:text-slate-400">첨부 실패</span>
                 <span className="font-bold text-rose-700">
                   {failedAttachmentCount}개
                 </span>
@@ -627,9 +627,9 @@ export default function CreatePostPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-slate-200/80 bg-white p-4 sm:p-5">
-            <h2 className="text-sm font-bold text-slate-800">발행 액션</h2>
-            <p className="mt-1 text-xs text-slate-600">
+          <section className="rounded-3xl border border-slate-200/80 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">발행 액션</h2>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
               업로드 완료 후 게시하기가 활성화됩니다.
             </p>
             <div className="mt-4 space-y-2">
@@ -645,7 +645,7 @@ export default function CreatePostPage() {
                 variant="secondary"
                 onClick={() => navigate("/posts")}
                 disabled={isActionLocked}
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white"
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 취소
               </Button>
@@ -653,14 +653,14 @@ export default function CreatePostPage() {
           </section>
         </aside>
 
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 backdrop-blur lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 backdrop-blur dark:border-slate-700 dark:bg-slate-950/95 lg:hidden">
           <div className="mx-auto flex w-full max-w-6xl items-center gap-2">
             <Button
               type="button"
               variant="secondary"
               onClick={() => navigate("/posts")}
               disabled={isActionLocked}
-              className="h-11 min-w-[92px] rounded-xl border border-slate-200 bg-white text-sm"
+              className="h-11 min-w-[92px] rounded-xl border border-slate-200 bg-white text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               취소
             </Button>
@@ -672,7 +672,7 @@ export default function CreatePostPage() {
               {isPendingSubmit ? "게시 중..." : "게시하기"}
             </Button>
           </div>
-          <p className="mt-2 text-center text-[11px] text-slate-500">
+          <p className="mt-2 text-center text-[11px] text-slate-500 dark:text-slate-400">
             첨부 완료 {completeAttachmentCount}개 · 실패 {failedAttachmentCount}개
           </p>
         </div>

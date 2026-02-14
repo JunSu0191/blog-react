@@ -21,7 +21,7 @@ export default function PostFeedPagination({
 }: PostFeedPaginationProps) {
   return (
     <SurfaceCard className="flex flex-wrap items-center justify-between gap-3 px-4 py-3" padded="none">
-      <p className="text-sm text-slate-500">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         총 {totalElements}개 중 {pageNumber * pageSize + 1} -{" "}
         {Math.min((pageNumber + 1) * pageSize, totalElements)} 표시
       </p>
@@ -35,7 +35,7 @@ export default function PostFeedPagination({
         >
           이전
         </Button>
-        <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
+        <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
           {pageNumber + 1} / {totalPages}
         </span>
         <Button

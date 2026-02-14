@@ -36,9 +36,9 @@ export default function PostList({ posts, viewMode = "list" }: PostListProps) {
 
   if (!posts || posts.length === 0) {
     return (
-      <div className="card-reveal rounded-3xl border border-dashed border-slate-300 bg-white/90 p-16 text-center">
-        <p className="text-xl font-bold text-slate-700">아직 게시글이 없습니다.</p>
-        <p className="mt-2 text-sm text-slate-500">첫 글을 작성해 피드를 채워보세요.</p>
+      <div className="card-reveal rounded-3xl border border-dashed border-slate-300 bg-white/90 p-16 text-center dark:border-slate-700 dark:bg-slate-900/80">
+        <p className="text-xl font-bold text-slate-700 dark:text-slate-200">아직 게시글이 없습니다.</p>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">첫 글을 작성해 피드를 채워보세요.</p>
       </div>
     );
   }
@@ -55,25 +55,25 @@ export default function PostList({ posts, viewMode = "list" }: PostListProps) {
             onFocus={() => handlePrefetchDetail(post.id)}
           >
             <article
-              className="card-reveal group rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
+              className="card-reveal group rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_18px_34px_-26px_rgba(2,6,23,0.8)] dark:hover:border-blue-700/70"
               style={{ animationDelay: `${index * 45}ms` }}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <h3 className="line-clamp-1 text-base font-extrabold text-slate-900 transition-colors group-hover:text-blue-700">
+                  <h3 className="line-clamp-1 text-base font-extrabold text-slate-900 transition-colors group-hover:text-blue-700 dark:text-slate-100 dark:group-hover:text-blue-300">
                     {post.title}
                   </h3>
-                  <p className="mt-1 line-clamp-2 text-sm text-slate-600">
+                  <p className="mt-1 line-clamp-2 text-sm text-slate-600 dark:text-slate-300">
                     {stripHtml(post.content).slice(0, 180) || "본문 미리보기가 없습니다."}
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                   {formatDate(post.createdAt)}
                 </span>
               </div>
 
               <div className="mt-3 flex items-center justify-between text-xs">
-                <span className="font-semibold text-slate-500">작성자 {post.userId}</span>
+                <span className="font-semibold text-slate-500 dark:text-slate-400">작성자 {post.userId}</span>
                 {(post.attachFiles?.length || 0) > 0 && (
                   <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-bold text-emerald-700">
                     첨부 {post.attachFiles?.length}

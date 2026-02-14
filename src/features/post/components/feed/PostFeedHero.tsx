@@ -20,11 +20,11 @@ export default function PostFeedHero({ stats, onPrefetchCreate }: PostFeedHeroPr
       <div className="pointer-events-none absolute right-0 top-0 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(59,130,246,0.18),transparent_62%)]" />
       <div className="relative flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-bold text-blue-700">Pulse Feed</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+          <p className="text-sm font-bold text-blue-700 dark:text-blue-300">Pulse Feed</p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
             오늘의 블로그 스트림
           </h1>
-          <p className="mt-2 text-sm text-slate-600 sm:text-base">
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 sm:text-base">
             빠르게 탐색하고, 읽고, 바로 작성하는 파워풀한 에디토리얼 허브
           </p>
         </div>
