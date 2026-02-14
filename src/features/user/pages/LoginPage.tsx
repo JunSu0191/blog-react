@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuthContext } from "../../../shared/context/useAuthContext";
-import { Input, Button } from "../../../shared/ui";
+import { Input, Button, ThemeToggle } from "../../../shared/ui";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -47,13 +47,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
-        <h2 className="text-3xl font-bold text-slate-900 mb-2">로그인</h2>
-        <p className="text-slate-600 mb-8">계정에 로그인하세요</p>
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4 dark:from-slate-950 dark:to-slate-900">
+      <ThemeToggle className="absolute right-4 top-4" />
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="mb-2 text-3xl font-bold text-slate-900 dark:text-slate-100">로그인</h2>
+        <p className="mb-8 text-slate-600 dark:text-slate-400">계정에 로그인하세요</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
             {error}
           </div>
         )}
@@ -88,11 +89,11 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-6 text-center">
-          <p className="text-slate-600 text-sm">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             계정이 없으신가요?{" "}
             <Link
               to="/register"
-              className="font-medium text-blue-600 hover:text-blue-700 transition-colors"
+              className="font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
             >
               회원가입
             </Link>

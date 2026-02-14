@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuthContext } from "../../../shared/context/useAuthContext";
-import { Input, Button } from "../../../shared/ui";
+import { Input, Button, ThemeToggle } from "../../../shared/ui";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
@@ -70,13 +70,14 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
-        <h2 className="text-3xl font-bold text-slate-900 mb-2">회원가입</h2>
-        <p className="text-slate-600 mb-8">새로운 계정을 만들어보세요</p>
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4 dark:from-slate-950 dark:to-slate-900">
+      <ThemeToggle className="absolute right-4 top-4" />
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="mb-2 text-3xl font-bold text-slate-900 dark:text-slate-100">회원가입</h2>
+        <p className="mb-8 text-slate-600 dark:text-slate-400">새로운 계정을 만들어보세요</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
             {error}
           </div>
         )}
@@ -99,7 +100,7 @@ export default function RegisterPage() {
           />
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
               비밀번호
             </label>
             <input
@@ -118,13 +119,13 @@ export default function RegisterPage() {
               }}
               disabled={isLoading}
               autoComplete="new-password"
-              className="w-full px-4 py-2.5 text-base bg-white border border-slate-200 rounded-lg transition-all duration-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 hover:border-slate-300 placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200"
+              className="h-10 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-blue-400"
               style={{ textTransform: "none" }}
             />
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               최소 6자 이상
               {isComposingPassword && (
-                <span className="text-orange-600 ml-2">
+                <span className="ml-2 text-orange-600 dark:text-orange-400">
                   ⚠️ 한글 입력 모드에서는 영문자가 대문자로 입력될 수 있습니다
                 </span>
               )}
@@ -132,7 +133,7 @@ export default function RegisterPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">
               비밀번호 확인
             </label>
             <input
@@ -151,18 +152,18 @@ export default function RegisterPage() {
               }}
               disabled={isLoading}
               autoComplete="new-password"
-              className={`w-full px-4 py-2.5 text-base bg-white border rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 hover:border-slate-300 placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-500 disabled:border-slate-200 ${
+              className={`h-10 w-full rounded-xl border bg-white px-3 py-2 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 ${
                 passwordError
-                  ? "border-red-500 focus:ring-red-500/20 focus:border-red-500"
-                  : "border-slate-200 focus:border-blue-500 focus:ring-blue-500/20"
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-500/20 dark:border-red-500"
+                  : "border-slate-300 focus:border-blue-500 focus:ring-blue-500/20 dark:border-slate-700 dark:focus:border-blue-400"
               }`}
               style={{ textTransform: "none" }}
             />
             {passwordError && (
-              <p className="text-sm text-red-600 mt-1">{passwordError}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{passwordError}</p>
             )}
             {isComposingPasswordConfirm && !passwordError && (
-              <p className="text-sm text-orange-600 mt-1">
+              <p className="mt-1 text-sm text-orange-600 dark:text-orange-400">
                 ⚠️ 한글 입력 모드에서는 영문자가 대문자로 입력될 수 있습니다
               </p>
             )}
@@ -181,11 +182,11 @@ export default function RegisterPage() {
         </form>
 
         <div className="mt-6 text-center">
-          <p className="text-slate-600 text-sm">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             이미 계정이 있으신가요?{" "}
             <Link
               to="/login"
-              className="font-medium text-blue-600 hover:text-blue-700 transition-colors"
+              className="font-medium text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
             >
               로그인
             </Link>
