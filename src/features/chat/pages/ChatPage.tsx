@@ -306,15 +306,15 @@ export default function ChatPage() {
           />
         ) : (
           <>
-            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <div className="px-4 py-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Messenger</p>
                 <div className="mt-1 flex items-start justify-between gap-3">
                   <div>
-                    <h1 className="text-2xl font-black tracking-tight text-slate-900">
+                    <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">
                       {mobileTab === "conversations" ? "채팅" : "빠른 1:1"}
                     </h1>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       {mobileTab === "conversations"
                         ? "카카오톡처럼 대화 목록에서 방을 선택해 시작하세요."
                         : "유저를 선택하면 바로 1:1 대화방이 열립니다."}
@@ -324,20 +324,20 @@ export default function ChatPage() {
                     type="button"
                     variant="outline"
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="h-9 rounded-xl border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    className="h-9 rounded-xl border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
                     + 그룹
                   </Button>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+                <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1 dark:bg-slate-800">
                   <button
                     type="button"
                     onClick={() => setMobileTab("conversations")}
                     className={[
                       "h-10 rounded-xl text-xs font-semibold transition",
                       mobileTab === "conversations"
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-slate-500 hover:text-slate-700",
+                        ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                        : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-100",
                     ].join(" ")}
                   >
                     대화 목록
@@ -348,8 +348,8 @@ export default function ChatPage() {
                     className={[
                       "h-10 rounded-xl text-xs font-semibold transition",
                       mobileTab === "direct"
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-slate-500 hover:text-slate-700",
+                        ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                        : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-100",
                     ].join(" ")}
                   >
                     빠른 1:1
@@ -361,7 +361,7 @@ export default function ChatPage() {
             {mobileTab === "conversations" ? (
               <SurfaceCard
                 padded="none"
-                className="overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm"
+                className="overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm dark:border-slate-700 dark:bg-slate-900/95"
               >
                 <ConversationList
                   conversations={conversations}
@@ -371,14 +371,14 @@ export default function ChatPage() {
                 />
               </SurfaceCard>
             ) : (
-              <SurfaceCard className="space-y-3 rounded-3xl border border-slate-200 bg-white/95">
+              <SurfaceCard className="space-y-3 rounded-3xl border border-slate-200 bg-white/95 dark:border-slate-700 dark:bg-slate-900/95">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-slate-900">대화 가능한 사용자</p>
-                  <span className="text-[11px] font-semibold text-slate-500">{selectableUsers.length}명</span>
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">대화 가능한 사용자</p>
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{selectableUsers.length}명</span>
                 </div>
                 <div className="space-y-2">
                   {selectableUsers.length === 0 && (
-                    <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                       대화 가능한 사용자가 없습니다.
                     </p>
                   )}
@@ -389,15 +389,15 @@ export default function ChatPage() {
                       onClick={() => {
                         void handleCreateDirect(chatUser.userId);
                       }}
-                      className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-slate-300 hover:bg-slate-50"
+                      className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600 dark:hover:bg-slate-800"
                     >
                       <div>
-                        <p className="line-clamp-1 text-sm font-semibold text-slate-800">
+                        <p className="line-clamp-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
                           {chatUser.name || chatUser.username || `User ${chatUser.userId}`}
                         </p>
-                        <p className="mt-0.5 text-[11px] text-slate-500">@{chatUser.username || chatUser.userId}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">@{chatUser.username || chatUser.userId}</p>
                       </div>
-                      <span className="text-xs font-semibold text-slate-500">대화 시작</span>
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">대화 시작</span>
                     </button>
                   ))}
                 </div>
@@ -407,11 +407,11 @@ export default function ChatPage() {
         )
       ) : (
         <>
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <div className="flex flex-col gap-3 px-4 py-4 sm:px-6 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h1 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">메신저</h1>
-                <p className="mt-1 text-xs text-slate-600 sm:text-sm">
+                <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-2xl">메신저</h1>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-400 sm:text-sm">
                   팀 채팅, 1:1 대화, 초대 기반 그룹방을 한 화면에서 관리합니다.
                 </p>
               </div>
@@ -420,7 +420,7 @@ export default function ChatPage() {
                   type="button"
                   variant="outline"
                   onClick={() => setIsCreateModalOpen(true)}
-                  className="rounded-xl border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                  className="rounded-xl border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   + 새 그룹 초대
                 </Button>
@@ -430,14 +430,14 @@ export default function ChatPage() {
 
           <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
             <div className={selectedConversationId ? "hidden space-y-4 lg:block" : "space-y-4"}>
-              <SurfaceCard className="space-y-3 rounded-2xl border border-slate-200 bg-white/95">
+              <SurfaceCard className="space-y-3 rounded-2xl border border-slate-200 bg-white/95 dark:border-slate-700 dark:bg-slate-900/95">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-bold text-slate-900">빠른 1:1 시작</p>
-                  <span className="text-[11px] font-semibold text-slate-500">{selectableUsers.length}명</span>
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">빠른 1:1 시작</p>
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{selectableUsers.length}명</span>
                 </div>
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {selectableUsers.length === 0 && (
-                    <p className="text-xs text-slate-500">대화 가능한 사용자가 없습니다.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">대화 가능한 사용자가 없습니다.</p>
                   )}
                   {selectableUsers.map((chatUser) => (
                     <button
@@ -446,12 +446,12 @@ export default function ChatPage() {
                       onClick={() => {
                         void handleCreateDirect(chatUser.userId);
                       }}
-                      className="min-w-[140px] rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-slate-300 hover:bg-white"
+                      className="min-w-[140px] rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600 dark:hover:bg-slate-900"
                     >
-                      <p className="line-clamp-1 text-sm font-semibold text-slate-800">
+                      <p className="line-clamp-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
                         {chatUser.name || chatUser.username || `User ${chatUser.userId}`}
                       </p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">@{chatUser.username || chatUser.userId}</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">@{chatUser.username || chatUser.userId}</p>
                     </button>
                   ))}
                 </div>
@@ -459,7 +459,7 @@ export default function ChatPage() {
 
               <SurfaceCard
                 padded="none"
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-sm"
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white/95 shadow-sm dark:border-slate-700 dark:bg-slate-900/95"
               >
                 <ConversationList
                   conversations={conversations}
@@ -480,7 +480,7 @@ export default function ChatPage() {
                   onBack={handleBackToConversationList}
                 />
               ) : (
-                <SurfaceCard className="flex h-[72vh] items-center justify-center rounded-2xl border border-slate-200 bg-white text-sm text-slate-500">
+                <SurfaceCard className="flex h-[72vh] items-center justify-center rounded-2xl border border-slate-200 bg-white text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
                   왼쪽에서 대화방을 선택하거나 새 그룹을 만들어주세요.
                 </SurfaceCard>
               )}
@@ -491,16 +491,16 @@ export default function ChatPage() {
 
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/45 p-0 sm:items-center sm:p-4">
-          <div className="w-full rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-3xl sm:p-5">
+          <div className="w-full rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-3xl sm:p-5 dark:border-slate-700 dark:bg-slate-900">
             <div className="mb-3 flex items-start justify-between">
               <div>
-                <p className="text-base font-black text-slate-900">새 그룹 채팅 만들기</p>
-                <p className="mt-1 text-xs text-slate-500">멤버를 선택해서 바로 초대할 수 있습니다.</p>
+                <p className="text-base font-black text-slate-900 dark:text-slate-100">새 그룹 채팅 만들기</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">멤버를 선택해서 바로 초대할 수 있습니다.</p>
               </div>
               <button
                 type="button"
                 onClick={resetCreateState}
-                className="rounded-lg px-2 py-1 text-sm text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                className="rounded-lg px-2 py-1 text-sm text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               >
                 닫기
               </button>
@@ -517,9 +517,9 @@ export default function ChatPage() {
                 onChange={(event) => setParticipantSearch(event.target.value)}
                 placeholder="이름/username/userId 검색"
               />
-              <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2">
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/70">
                 {filteredUsers.length === 0 && (
-                  <p className="p-2 text-xs text-slate-500">검색 결과가 없습니다.</p>
+                  <p className="p-2 text-xs text-slate-500 dark:text-slate-400">검색 결과가 없습니다.</p>
                 )}
                 {filteredUsers.map((chatUser) => {
                   const selected = selectedParticipantIds.includes(chatUser.userId);
@@ -531,22 +531,22 @@ export default function ChatPage() {
                       className={[
                         "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition",
                         selected
-                          ? "border-blue-300 bg-blue-50 text-blue-900"
-                          : "border-transparent bg-white text-slate-700 hover:border-slate-200",
+                          ? "border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-700 dark:bg-blue-950/35 dark:text-blue-300"
+                          : "border-transparent bg-white text-slate-700 hover:border-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600",
                       ].join(" ")}
                     >
                       <div>
                         <p className="text-sm font-semibold">
                           {chatUser.name || chatUser.username || `User ${chatUser.userId}`}
                         </p>
-                        <p className="text-[11px] text-slate-500">@{chatUser.username || chatUser.userId}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">@{chatUser.username || chatUser.userId}</p>
                       </div>
                       <span className="text-xs font-bold">{selected ? "선택됨" : "선택"}</span>
                     </button>
                   );
                 })}
               </div>
-              <div className="flex items-center justify-between text-xs text-slate-500">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>선택 멤버 {selectedParticipantIds.length}명</span>
                 <span>생성 후 즉시 대화방으로 이동</span>
               </div>

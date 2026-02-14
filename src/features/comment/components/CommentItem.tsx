@@ -56,13 +56,13 @@ export default function CommentItem({ comment, isOwner }: CommentItemProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white">
             {comment.name}
           </span>
-          <p className="mt-1 text-xs text-slate-500">{formatDateTime(comment.createdAt)}</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatDateTime(comment.createdAt)}</p>
         </div>
 
         {isOwner && !isEditing && (
@@ -91,7 +91,7 @@ export default function CommentItem({ comment, isOwner }: CommentItemProps) {
             onChange={(event) => setEditContent(event.target.value)}
             rows={3}
             disabled={updateMutation.isPending}
-            className="w-full resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
+            className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
           />
           <div className="flex items-center gap-2">
             <Button type="button" size="sm" isLoading={updateMutation.isPending} onClick={handleUpdate} className="rounded-lg bg-blue-600 text-white hover:bg-blue-700">
@@ -113,7 +113,7 @@ export default function CommentItem({ comment, isOwner }: CommentItemProps) {
           </div>
         </div>
       ) : (
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{comment.content}</p>
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">{comment.content}</p>
       )}
     </div>
   );

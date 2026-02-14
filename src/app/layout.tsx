@@ -1,7 +1,9 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMemo, type ReactNode } from "react";
+import { Bell, Home, MessageCircle } from "lucide-react";
+import { Avatar, AvatarFallback, Badge } from "@/components/ui";
 import { useAuthContext } from "../shared/context/useAuthContext";
-import { Button } from "../shared/ui";
+import { Button, ThemeToggle } from "../shared/ui";
 import { preloadCreateFlow } from "./routePreload";
 import {
   NotificationBell,
@@ -36,59 +38,15 @@ const defaultMenuItems: MenuItem[] = [
 ];
 
 function HomeIcon({ active }: MobileTabIconProps) {
-  return (
-    <svg
-      className={["h-5 w-5 transition", active ? "scale-[1.03]" : ""].join(" ")}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M3 10.5L12 3l9 7.5" />
-      <path d="M5 9.5V21h14V9.5" />
-      <path d="M9 21v-6h6v6" />
-    </svg>
-  );
+  return <Home className={["h-5 w-5 transition", active ? "scale-[1.03]" : ""].join(" ")} aria-hidden="true" />;
 }
 
 function ChatIcon({ active }: MobileTabIconProps) {
-  return (
-    <svg
-      className={["h-5 w-5 transition", active ? "scale-[1.03]" : ""].join(" ")}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21 12a8.5 8.5 0 0 1-8.5 8.5H4l2.2-3.3A8.5 8.5 0 1 1 21 12Z" />
-      <path d="M8.5 11h7" />
-      <path d="M8.5 14h5" />
-    </svg>
-  );
+  return <MessageCircle className={["h-5 w-5 transition", active ? "scale-[1.03]" : ""].join(" ")} aria-hidden="true" />;
 }
 
 function NotificationIcon({ active }: MobileTabIconProps) {
-  return (
-    <svg
-      className={["h-5 w-5 transition", active ? "scale-[1.03]" : ""].join(" ")}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-      <path d="M9 17a3 3 0 0 0 6 0" />
-    </svg>
-  );
+  return <Bell className={["h-5 w-5 transition", active ? "scale-[1.03]" : ""].join(" ")} aria-hidden="true" />;
 }
 
 const mobileBottomTabs: MobileBottomTab[] = [
@@ -105,6 +63,7 @@ export default function Layout({
   const navigate = useNavigate();
   const location = useLocation();
   const { data: notificationData } = useNotifications(Boolean(token));
+  const userInitial = user?.username?.slice(0, 1).toUpperCase() || "U";
 
   const handleLogout = () => {
     logout();
@@ -131,14 +90,14 @@ export default function Layout({
     Boolean(token) && location.pathname !== "/posts/create";
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <NotificationRealtimeBridge />
 
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur-xl dark:border-slate-800/90 dark:bg-slate-950/80">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link
             to="/posts"
-            className="text-lg font-black tracking-tight text-slate-900"
+            className="text-lg font-black tracking-tight text-slate-900 dark:text-slate-100"
           >
             Blog Pulse
           </Link>
@@ -162,7 +121,7 @@ export default function Layout({
                   "rounded-xl px-4 py-2 text-sm font-semibold transition",
                   isMenuActive(item.path)
                     ? "bg-blue-600 text-white"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100",
                 ].join(" ")}
               >
                 {item.label}
@@ -172,12 +131,15 @@ export default function Layout({
 
           {token && (
             <div className="hidden items-center gap-2 sm:gap-3 md:flex">
+              <ThemeToggle />
               <NotificationBell />
-              <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 sm:flex">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-[11px] text-white">
-                  {user?.username?.slice(0, 1).toUpperCase() || "U"}
-                </span>
-                {user?.username || "로그인 사용자"}
+              <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 sm:flex">
+                <Avatar className="h-6 w-6 border border-blue-200/80 dark:border-blue-900/50">
+                  <AvatarFallback className="bg-blue-600 text-[11px] font-bold text-white">
+                    {userInitial}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="max-w-[10rem] truncate">{user?.username || "로그인 사용자"}</span>
               </div>
               <Button
                 type="button"
@@ -193,9 +155,12 @@ export default function Layout({
 
           {token && (
             <div className="flex items-center gap-2 md:hidden">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-[11px] font-semibold text-white">
-                {user?.username?.slice(0, 1).toUpperCase() || "U"}
-              </span>
+              <ThemeToggle />
+              <Avatar className="h-8 w-8 border border-blue-200/80 dark:border-blue-900/50">
+                <AvatarFallback className="bg-blue-600 text-[11px] font-semibold text-white">
+                  {userInitial}
+                </AvatarFallback>
+              </Avatar>
               <Button
                 type="button"
                 variant="outline"
@@ -217,7 +182,7 @@ export default function Layout({
       </main>
 
       {shouldShowMobileBottomNav && (
-        <nav className="fixed inset-x-0 bottom-0 z-[60] border-t border-slate-200/90 bg-white/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur-xl md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-[60] border-t border-slate-200/90 bg-white/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur-xl dark:border-slate-800/90 dark:bg-slate-950/95 md:hidden">
           <div className="mx-auto grid max-w-md grid-cols-3 gap-2">
             {mobileBottomTabs.map((tab) => {
               const isActive = isMenuActive(tab.path);
@@ -231,15 +196,15 @@ export default function Layout({
                     "relative flex h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-semibold transition",
                     isActive
                       ? "bg-blue-600 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
                   ].join(" ")}
                 >
                   <span className="relative inline-flex">
                     <Icon active={isActive} />
                     {showUnreadBadge && (
-                      <span className="absolute -right-2 -top-2 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white">
+                      <Badge className="absolute -right-2 -top-2 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white hover:bg-rose-600">
                         {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
-                      </span>
+                      </Badge>
                     )}
                   </span>
                   <span>{tab.label}</span>

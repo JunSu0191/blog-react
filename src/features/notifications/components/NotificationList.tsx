@@ -53,7 +53,7 @@ export default function NotificationList({ compact = false }: NotificationListPr
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-slate-700">알림 {unreadCount}개 읽지 않음</p>
+        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">알림 {unreadCount}개 읽지 않음</p>
         <Button
           type="button"
           size="sm"
@@ -66,15 +66,15 @@ export default function NotificationList({ compact = false }: NotificationListPr
       </div>
 
       <div className={compact ? "max-h-[340px] overflow-y-auto" : ""}>
-        {isLoading && <p className="py-4 text-center text-sm text-slate-500">알림 불러오는 중...</p>}
+        {isLoading && <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">알림 불러오는 중...</p>}
         {error && (
-          <p className="rounded-xl border border-rose-200 bg-rose-50 py-3 text-center text-sm font-semibold text-rose-700">
+          <p className="rounded-xl border border-rose-200 bg-rose-50 py-3 text-center text-sm font-semibold text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">
             알림을 불러오지 못했습니다.
           </p>
         )}
 
         {!isLoading && !error && notifications.length === 0 && (
-          <p className="rounded-xl border border-dashed border-slate-300 py-8 text-center text-sm text-slate-500">
+          <p className="rounded-xl border border-dashed border-slate-300 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
             새 알림이 없습니다.
           </p>
         )}
@@ -93,22 +93,22 @@ export default function NotificationList({ compact = false }: NotificationListPr
                 className={[
                   "w-full rounded-xl border px-3 py-2 text-left transition",
                   item.isRead
-                    ? "border-slate-200 bg-white"
-                    : "border-blue-200 bg-blue-50/60",
+                    ? "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+                    : "border-blue-200 bg-blue-50/60 dark:border-blue-900/50 dark:bg-blue-950/30",
                 ].join(" ")}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="line-clamp-1 text-sm font-semibold text-slate-800">
+                    <p className="line-clamp-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
                       {content.title}
                     </p>
-                    <p className="mt-1 line-clamp-2 text-xs text-slate-600">{content.body}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-slate-600 dark:text-slate-300">{content.body}</p>
                   </div>
                   {!item.isRead && (
                     <span className="mt-0.5 h-2.5 w-2.5 rounded-full bg-blue-600" />
                   )}
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(item.createdAt)}</p>
+                <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{formatDateTime(item.createdAt)}</p>
               </button>
             );
           })}

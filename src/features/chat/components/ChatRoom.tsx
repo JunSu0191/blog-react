@@ -356,18 +356,18 @@ export default function ChatRoom({
   return (
     <div
       className={[
-        "flex h-[calc(100dvh-9.5rem)] min-h-[420px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.08)] lg:h-[78vh] lg:min-h-[540px]",
+        "flex h-[calc(100dvh-9.5rem)] min-h-[420px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.08)] lg:h-[78vh] lg:min-h-[540px] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_18px_38px_-24px_rgba(2,6,23,0.92)]",
         className || "",
       ].join(" ")}
     >
-      <div className="border-b border-slate-200 bg-white px-3 py-3 sm:px-4">
+      <div className="border-b border-slate-200 bg-white px-3 py-3 sm:px-4 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             {onBack && (
               <button
                 type="button"
                 onClick={onBack}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 lg:hidden"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 lg:hidden dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                 aria-label="대화 목록으로 이동"
               >
                 ←
@@ -377,7 +377,7 @@ export default function ChatRoom({
               {(conversationTitle || `#${conversationId}`).slice(0, 1)}
             </span>
             <div className="min-w-0">
-              <p className="line-clamp-1 text-sm font-bold text-slate-900">
+              <p className="line-clamp-1 text-sm font-bold text-slate-900 dark:text-slate-100">
                 {conversationTitle || `대화방 #${conversationId}`}
               </p>
             </div>
@@ -388,15 +388,15 @@ export default function ChatRoom({
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="flex-1 space-y-2 overflow-y-auto bg-slate-50/70 px-3 py-3 sm:px-4"
+        className="flex-1 space-y-2 overflow-y-auto bg-slate-50/70 px-3 py-3 sm:px-4 dark:bg-slate-950/70"
       >
         {isFetchingNextPage && (
-          <div className="py-1 text-center text-xs text-slate-500">
+          <div className="py-1 text-center text-xs text-slate-500 dark:text-slate-400">
             이전 메시지 로딩 중...
           </div>
         )}
         {isLoading && (
-          <div className="py-1 text-center text-xs text-slate-500">
+          <div className="py-1 text-center text-xs text-slate-500 dark:text-slate-400">
             메시지 불러오는 중...
           </div>
         )}
@@ -417,12 +417,12 @@ export default function ChatRoom({
               className={[
                 "max-w-[92%] rounded-2xl border px-3 py-2 sm:max-w-[78%]",
                 isMine
-                  ? "ml-auto border-blue-200 bg-blue-50/90 shadow-[0_1px_2px_rgba(37,99,235,0.1)]"
-                  : "mr-auto border-slate-200 bg-white shadow-sm",
+                  ? "ml-auto border-blue-200 bg-blue-50/90 shadow-[0_1px_2px_rgba(37,99,235,0.1)] dark:border-blue-700/60 dark:bg-blue-950/35"
+                  : "mr-auto border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900",
               ].join(" ")}
             >
-              <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-slate-400">
-                <span className="line-clamp-1 font-semibold text-slate-500">
+              <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+                <span className="line-clamp-1 font-semibold text-slate-500 dark:text-slate-300">
                   {senderLabel}
                 </span>
                 <span>
@@ -434,7 +434,7 @@ export default function ChatRoom({
                     : ""}
                 </span>
               </div>
-              <p className="whitespace-pre-wrap break-words text-sm text-slate-700">
+              <p className="whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-100">
                 {message.content}
               </p>
               {message.status === "sending" && (
@@ -452,8 +452,8 @@ export default function ChatRoom({
         })}
       </div>
 
-      <div className="border-t border-slate-200 bg-white p-3 sm:p-4">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-2 sm:p-2.5">
+      <div className="border-t border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-900">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-2 sm:p-2.5 dark:border-slate-700 dark:bg-slate-800/70">
           <div className="flex items-end gap-2">
             <textarea
               value={composerValue}
@@ -479,7 +479,7 @@ export default function ChatRoom({
               }}
               placeholder="메시지를 입력하세요"
               rows={2}
-              className="max-h-32 min-h-[46px] flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
+              className="max-h-32 min-h-[46px] flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
             <Button
               type="button"
@@ -489,7 +489,7 @@ export default function ChatRoom({
               전송
             </Button>
           </div>
-          <p className="mt-2 px-1 text-[11px] text-slate-500">
+          <p className="mt-2 px-1 text-[11px] text-slate-500 dark:text-slate-400">
             Enter 전송 · Shift+Enter 줄바꿈
           </p>
         </div>
