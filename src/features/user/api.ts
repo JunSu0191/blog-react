@@ -14,11 +14,24 @@ export type RegisterRequest = {
   name: string;
 };
 
+export type AuthUser = {
+  id: number;
+  username: string;
+  name: string;
+};
+
 export type AuthResponse = {
   token: string;
   refreshToken?: string;
+  user?: AuthUser;
   userId?: number;
 };
+
+function resolveUserId(data: AuthResponse): number | undefined {
+  if (typeof data.user?.id === "number") return data.user.id;
+  if (typeof data.userId === "number") return data.userId;
+  return undefined;
+}
 
 export async function login(req: LoginRequest): Promise<AuthResponse> {
   try {
@@ -26,11 +39,11 @@ export async function login(req: LoginRequest): Promise<AuthResponse> {
       method: "POST",
       data: req,
     });
-    console.log("Login response:", data);
 
     if (data?.token) setToken(data.token);
     if (data?.refreshToken) setRefreshToken(data.refreshToken);
-    if (typeof data?.userId === "number") setUserId(data.userId);
+    const userId = resolveUserId(data);
+    if (typeof userId === "number") setUserId(userId);
     return data;
   } catch (err: any) {
     const serverMsg = err?.response?.data?.message || "로그인에 실패했습니다";
@@ -46,10 +59,26 @@ export async function register(req: RegisterRequest): Promise<AuthResponse> {
     });
     if (data?.token) setToken(data.token);
     if (data?.refreshToken) setRefreshToken(data.refreshToken);
-    if (typeof data?.userId === "number") setUserId(data.userId);
+    const userId = resolveUserId(data);
+    if (typeof userId === "number") setUserId(userId);
     return data;
   } catch (err: any) {
     const serverMsg = err?.response?.data?.message || "회원가입에 실패했습니다";
+    throw new Error(serverMsg);
+  }
+}
+
+export async function getMe(): Promise<AuthUser> {
+  try {
+    const data = await api<AuthUser>(`${BASE}/auth/me`, {
+      method: "GET",
+    });
+    if (typeof data?.id === "number") {
+      setUserId(data.id);
+    }
+    return data;
+  } catch (err: any) {
+    const serverMsg = err?.response?.data?.message || "내 정보 조회에 실패했습니다";
     throw new Error(serverMsg);
   }
 }

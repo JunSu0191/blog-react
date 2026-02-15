@@ -3,7 +3,7 @@ import type { AuthResponse } from "@/features/user/api";
 export interface User {
   id: number;
   username: string;
-  name?: string;
+  name: string;
 }
 
 export type AuthContextValue = {

@@ -42,6 +42,10 @@ function shouldBypassRefresh(url: string) {
   return /\/auth\/(login|register|refresh)(\/|$)/.test(url);
 }
 
+function isAuthEndpoint(url: string) {
+  return /\/auth(\/|$)/.test(url);
+}
+
 function normalizeRefreshPayload(raw: unknown): TokenRefreshResponse | null {
   if (!raw || typeof raw !== "object") return null;
 
@@ -94,6 +98,7 @@ async function requestApi<T = unknown>(
   retried = false,
 ): Promise<T> {
   const bypassRefresh = shouldBypassRefresh(input);
+  const authEndpoint = isAuthEndpoint(input);
   try {
     let token = getToken();
     if (!bypassRefresh && token && isTokenExpired(token)) {
@@ -102,35 +107,52 @@ async function requestApi<T = unknown>(
         clearAuthStorage();
       }
     }
+    if (!bypassRefresh && authEndpoint && !token) {
+      throw { status: 401, message: "인증이 필요합니다." } as ApiError;
+    }
 
     const headers = {
       ...((init?.headers as Record<string, string> | undefined) ?? {}),
     };
-    if (token && !headers.Authorization) {
+    if (token && !headers.Authorization && !bypassRefresh) {
       headers.Authorization = `Bearer ${token}`;
     }
-    if (!headers["X-User-Id"] && !headers["x-user-id"]) {
-      const resolvedUserId = getUserId() ?? getUserIdFromToken(token);
+    if (!authEndpoint && !headers["X-User-Id"] && !headers["x-user-id"]) {
+      const resolvedUserId = getUserIdFromToken(token) ?? getUserId();
       if (typeof resolvedUserId === "number") {
         headers["X-User-Id"] = String(resolvedUserId);
       }
     }
 
-    const res = await axios.request<ApiResponse<T>>({
+    const res = await axios.request<unknown>({
       ...init,
       url: input,
       headers,
     });
 
-    // 백엔드 응답 형식 체크
-    const apiRes = res.data;
-    
-    if (!apiRes.success) {
-      const message = apiRes.message || "요청에 실패했습니다";
-      throw { status: apiRes.status, message, data: apiRes.data } as ApiError;
+    if (res.status === 204 || typeof res.data === "undefined" || res.data === null) {
+      return undefined as T;
     }
 
-    return apiRes.data as T;
+    // 백엔드 응답 래퍼 형식(success/data) 지원
+    if (
+      typeof res.data === "object" &&
+      res.data !== null &&
+      "success" in res.data &&
+      "data" in res.data
+    ) {
+      const apiRes = res.data as ApiResponse<T>;
+
+      if (!apiRes.success) {
+        const message = apiRes.message || "요청에 실패했습니다";
+        throw { status: apiRes.status, message, data: apiRes.data } as ApiError;
+      }
+
+      return apiRes.data as T;
+    }
+
+    // 일부 엔드포인트는 래퍼 없이 원시 데이터를 반환한다.
+    return res.data as T;
   } catch (err) {
     if (err && typeof err === "object" && "status" in err && "message" in err) {
       // 인증 에러 처리 (상태코드가 UNAUTHORIZED 문자열일 수도 있음)
