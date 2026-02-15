@@ -12,6 +12,8 @@ type SocketState = "idle" | "connecting" | "connected";
 
 type ChatCallback = (payload: unknown) => void;
 type NotificationCallback = (payload: unknown) => void;
+type ConversationUnreadCountCallback = (payload: unknown) => void;
+type SocketConnectedCallback = (payload: { isReconnect: boolean; connectedAt: number }) => void;
 
 type ClientFrameDebug = {
   command: string;
@@ -31,6 +33,9 @@ const chatHandlers = new Map<number, Set<ChatCallback>>();
 const chatSubscriptionIds = new Map<number, string>();
 const notificationHandlers = new Set<NotificationCallback>();
 const notificationSubscriptionIds = new Set<string>();
+const unreadCountHandlers = new Map<number, Set<ConversationUnreadCountCallback>>();
+const unreadCountSubscriptionIds = new Map<number, string>();
+const socketConnectedHandlers = new Set<SocketConnectedCallback>();
 
 let ws: WebSocket | null = null;
 let state: SocketState = "idle";
@@ -43,6 +48,7 @@ let preferredUserId: number | undefined;
 let activeConnectUserIdHeader: string | null = null;
 let lastClientFrameDebug: ClientFrameDebug | null = null;
 let lastSendDebug: SendFrameDebug | null = null;
+let hasConnectedOnce = false;
 const isStompDebugEnabled = import.meta.env.VITE_STOMP_DEBUG === "true";
 const devFallbackUserId = (() => {
   const raw = (import.meta.env.VITE_DEV_USER_ID as string | undefined)?.trim();
@@ -190,6 +196,32 @@ function scheduleReconnect() {
   }, delay);
 }
 
+function notifySocketConnected(isReconnect: boolean) {
+  if (socketConnectedHandlers.size === 0) return;
+  const payload = {
+    isReconnect,
+    connectedAt: Date.now(),
+  };
+  socketConnectedHandlers.forEach((handler) => handler(payload));
+}
+
+function parseUnreadUserId(destination?: string, subscription?: string): number | null {
+  if (destination?.startsWith("/topic/chat/unreads/")) {
+    const fromDestination = Number(destination.split("/").pop());
+    if (Number.isFinite(fromDestination)) return fromDestination;
+  }
+
+  if (typeof subscription === "string") {
+    const matched = subscription.match(/^chat-unread-sub-(\d+)-/);
+    if (matched) {
+      const fromSubscription = Number(matched[1]);
+      if (Number.isFinite(fromSubscription)) return fromSubscription;
+    }
+  }
+
+  return null;
+}
+
 function connectByCandidates(index = 0) {
   if (typeof window === "undefined") return;
   if (index >= wsCandidates.length) {
@@ -243,11 +275,14 @@ function connectByCandidates(index = 0) {
       }
 
       if (frame.command === "CONNECTED") {
+        const isReconnect = hasConnectedOnce;
+        hasConnectedOnce = true;
         isStompConnected = true;
         reconnectCount = 0;
         clearReconnectTimer();
         state = "connected";
         resubscribeAll();
+        notifySocketConnected(isReconnect);
         continue;
       }
 
@@ -273,6 +308,17 @@ function connectByCandidates(index = 0) {
           (typeof subscription === "string" && notificationSubscriptionIds.has(subscription))
         ) {
           notificationHandlers.forEach((handler) => handler(payload));
+        }
+
+        if (
+          destination?.startsWith("/topic/chat/unreads/") ||
+          subscription?.startsWith("chat-unread-sub-")
+        ) {
+          const unreadUserId = parseUnreadUserId(destination, subscription);
+          if (typeof unreadUserId === "number") {
+            const handlers = unreadCountHandlers.get(unreadUserId);
+            handlers?.forEach((handler) => handler(payload));
+          }
         }
       }
 
@@ -336,6 +382,10 @@ function resubscribeAll() {
     subscribeChatTopic(conversationId);
   }
 
+  for (const [userId] of unreadCountHandlers.entries()) {
+    subscribeUnreadCountTopic(userId);
+  }
+
   if (notificationHandlers.size > 0) {
     subscribeNotificationChannels();
   }
@@ -364,6 +414,31 @@ function unsubscribeChatTopic(conversationId: number) {
     ...buildAuthHeaders(),
   });
   chatSubscriptionIds.delete(conversationId);
+}
+
+function subscribeUnreadCountTopic(userId: number) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const existing = unreadCountSubscriptionIds.get(userId);
+  if (existing) return;
+
+  const subscriptionId = `chat-unread-sub-${userId}-${nextId("cu")}`;
+  unreadCountSubscriptionIds.set(userId, subscriptionId);
+  sendFrame("SUBSCRIBE", {
+    id: subscriptionId,
+    destination: `/topic/chat/unreads/${userId}`,
+    ...buildAuthHeaders(userId),
+  });
+}
+
+function unsubscribeUnreadCountTopic(userId: number) {
+  const subId = unreadCountSubscriptionIds.get(userId);
+  if (!subId) return;
+
+  sendFrame("UNSUBSCRIBE", {
+    id: subId,
+    ...buildAuthHeaders(userId),
+  });
+  unreadCountSubscriptionIds.delete(userId);
 }
 
 function subscribeNotificationChannels() {
@@ -426,21 +501,23 @@ export function connect(userId?: number) {
 
 export function disconnect() {
   clearReconnectTimer();
-  if (!ws) return;
-
-  const receipt = nextReceipt();
-  sendFrame("DISCONNECT", {
-    receipt,
-    ...buildAuthHeaders(),
-  });
-  ws.close();
-  ws = null;
+  if (ws) {
+    const receipt = nextReceipt();
+    sendFrame("DISCONNECT", {
+      receipt,
+      ...buildAuthHeaders(),
+    });
+    ws.close();
+    ws = null;
+  }
   activeConnectUserIdHeader = null;
   state = "idle";
   reconnectCount = 0;
+  hasConnectedOnce = false;
   notificationSubscriptionIds.clear();
   preferredUserId = undefined;
   chatSubscriptionIds.clear();
+  unreadCountSubscriptionIds.clear();
 }
 
 export function subscribeChat(conversationId: number, callback: ChatCallback) {
@@ -462,6 +539,11 @@ export function subscribeChat(conversationId: number, callback: ChatCallback) {
   };
 }
 
+export function unsubscribeChat(conversationId: number) {
+  chatHandlers.delete(conversationId);
+  unsubscribeChatTopic(conversationId);
+}
+
 export function subscribeNotifications(callback: NotificationCallback) {
   notificationHandlers.add(callback);
   ensureConnected();
@@ -472,6 +554,36 @@ export function subscribeNotifications(callback: NotificationCallback) {
     if (notificationHandlers.size === 0) {
       unsubscribeNotificationChannels();
     }
+  };
+}
+
+export function subscribeConversationUnreadCounts(
+  userId: number,
+  callback: ConversationUnreadCountCallback,
+) {
+  const handlers = unreadCountHandlers.get(userId) ?? new Set<ConversationUnreadCountCallback>();
+  handlers.add(callback);
+  unreadCountHandlers.set(userId, handlers);
+
+  ensureConnected();
+  subscribeUnreadCountTopic(userId);
+
+  return () => {
+    const current = unreadCountHandlers.get(userId);
+    if (!current) return;
+    current.delete(callback);
+    if (current.size === 0) {
+      unreadCountHandlers.delete(userId);
+      unsubscribeUnreadCountTopic(userId);
+    }
+  };
+}
+
+export function subscribeSocketConnected(callback: SocketConnectedCallback) {
+  socketConnectedHandlers.add(callback);
+
+  return () => {
+    socketConnectedHandlers.delete(callback);
   };
 }
 

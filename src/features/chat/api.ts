@@ -1,13 +1,28 @@
 import { API_BASE_URL, api } from "@/shared/lib/api";
 
-export type ChatConversation = {
+export type ConversationSummary = {
   id: number;
-  title?: string;
+  title?: string | null;
+  displayTitle: string;
+  type?: string;
   lastMessage?: string;
+  unreadMessageCount: number;
+  // Backward compatibility for existing UI paths.
   unreadCount?: number;
   updatedAt?: string;
+  participantCount?: number;
   participantUserIds?: number[];
+  participantNames?: string[];
 };
+
+export type ChatConversation = ConversationSummary;
+
+export interface ConversationUnreadCountEvent {
+  type: "CONVERSATION_UNREAD_COUNT_UPDATED";
+  conversationId: number;
+  unreadMessageCount: number;
+  totalUnreadMessageCount: number;
+}
 
 export type ChatUser = {
   userId: number;
@@ -92,6 +107,86 @@ function normalizeConversationLastMessage(obj: Record<string, unknown>): string 
   );
 }
 
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => toText(item).trim())
+    .filter((item): item is string => item.length > 0);
+}
+
+function normalizeNumberArray(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => toFiniteNumber(item))
+    .filter((item): item is number => typeof item === "number");
+}
+
+function normalizeParticipantList(value: unknown): {
+  participantUserIds: number[];
+  participantNames: string[];
+} {
+  if (!Array.isArray(value)) {
+    return {
+      participantUserIds: [],
+      participantNames: [],
+    };
+  }
+
+  const participantUserIds: number[] = [];
+  const participantNames: string[] = [];
+
+  for (const item of value) {
+    if (!item || typeof item !== "object") {
+      const primitiveUserId = toFiniteNumber(item);
+      if (typeof primitiveUserId === "number") participantUserIds.push(primitiveUserId);
+      continue;
+    }
+
+    const obj = item as Record<string, unknown>;
+    const nestedUser =
+      obj.user && typeof obj.user === "object"
+        ? (obj.user as Record<string, unknown>)
+        : undefined;
+
+    const participantUserId =
+      toFiniteNumber(obj.userId) ??
+      toFiniteNumber(obj.id) ??
+      toFiniteNumber(obj.memberId) ??
+      toFiniteNumber(obj.participantUserId) ??
+      toFiniteNumber(obj.participant_id) ??
+      toFiniteNumber(nestedUser?.userId) ??
+      toFiniteNumber(nestedUser?.id);
+
+    if (typeof participantUserId === "number") participantUserIds.push(participantUserId);
+
+    const participantName = (
+      toText(obj.name) ||
+      toText(obj.username) ||
+      toText(obj.nickname) ||
+      toText(nestedUser?.name) ||
+      toText(nestedUser?.username) ||
+      toText(nestedUser?.nickname)
+    ).trim();
+
+    if (participantName) participantNames.push(participantName);
+  }
+
+  return {
+    participantUserIds,
+    participantNames,
+  };
+}
+
+function uniqueNumbers(values: number[]): number[] {
+  return Array.from(new Set(values));
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
 function normalizeConversation(raw: unknown): ChatConversation | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
@@ -106,29 +201,93 @@ function normalizeConversation(raw: unknown): ChatConversation | null {
 
   if (!Number.isFinite(id)) return null;
 
-  return {
-    id,
-    title:
-      toText(obj.title) ||
+  const participantUserIdsFromFlat = [
+    ...normalizeNumberArray(obj.participantUserIds),
+    ...normalizeNumberArray(obj.participant_user_ids),
+  ];
+
+  const participantNamesFromFlat = [
+    ...normalizeStringArray(obj.participantNames),
+    ...normalizeStringArray(obj.participant_names),
+  ];
+
+  const participantListFromParticipants = normalizeParticipantList(obj.participants);
+  const participantListFromMembers = normalizeParticipantList(obj.members);
+  const participantListFromUsers = normalizeParticipantList(obj.users);
+
+  const participantUserIds = uniqueNumbers([
+    ...participantUserIdsFromFlat,
+    ...participantListFromParticipants.participantUserIds,
+    ...participantListFromMembers.participantUserIds,
+    ...participantListFromUsers.participantUserIds,
+  ]);
+
+  const participantNames = uniqueStrings([
+    ...participantNamesFromFlat,
+    ...participantListFromParticipants.participantNames,
+    ...participantListFromMembers.participantNames,
+    ...participantListFromUsers.participantNames,
+  ]);
+
+  const type =
+    (typeof obj.type === "string" ? obj.type : undefined) ||
+    (typeof obj.conversationType === "string" ? obj.conversationType : undefined) ||
+    (typeof obj.roomType === "string" ? obj.roomType : undefined) ||
+    (typeof obj.chatType === "string" ? obj.chatType : undefined) ||
+    undefined;
+
+  const participantCount =
+    toFiniteNumber(obj.participantCount) ??
+    toFiniteNumber(obj.memberCount) ??
+    toFiniteNumber(obj.userCount) ??
+    toFiniteNumber(obj.participantsCount) ??
+    toFiniteNumber(obj.participant_count) ??
+    toFiniteNumber(obj.member_count) ??
+    toFiniteNumber(obj.user_count) ??
+    toFiniteNumber(obj.participants_count) ??
+    (participantUserIds.length > 0 ? participantUserIds.length : undefined) ??
+    (participantNames.length > 0 ? participantNames.length : undefined);
+
+  const unreadMessageCount =
+    toFiniteNumber(obj.unreadMessageCount) ??
+    toFiniteNumber(obj.unread_message_count) ??
+    toFiniteNumber(obj.unreadCount) ??
+    toFiniteNumber(obj.unread_count) ??
+    0;
+
+  const normalizedTitle = trimText(
+    toText(obj.title) ||
       toText(obj.conversationName) ||
       toText(obj.name),
+  );
+  const normalizedDisplayTitle = trimText(
+    toText(obj.displayTitle) || toText(obj.display_title),
+  );
+
+  return {
+    id,
+    title: normalizedTitle,
+    displayTitle: normalizedDisplayTitle || normalizedTitle || "이름 없는 대화방",
+    type,
     lastMessage: normalizeConversationLastMessage(obj),
-    unreadCount:
-      toFiniteNumber(obj.unreadCount) ??
-      toFiniteNumber(obj.unread_count) ??
-      toFiniteNumber(obj.unreadMessageCount) ??
-      toFiniteNumber(obj.unread_message_count) ??
-      0,
+    unreadMessageCount,
+    unreadCount: unreadMessageCount,
     updatedAt:
       (obj.updatedAt as string | undefined) ||
+      (obj.lastActivityAt as string | undefined) ||
       (obj.lastMessageAt as string | undefined) ||
+      (obj.last_activity_at as string | undefined) ||
       (obj.updated_at as string | undefined),
-    participantUserIds: Array.isArray(obj.participantUserIds)
-      ? (obj.participantUserIds as number[])
-      : Array.isArray(obj.participant_user_ids)
-        ? (obj.participant_user_ids as number[])
-        : undefined,
+    participantCount,
+    participantUserIds: participantUserIds.length > 0 ? participantUserIds : undefined,
+    participantNames: participantNames.length > 0 ? participantNames : undefined,
   };
+}
+
+function trimText(value?: string): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function normalizeUser(raw: unknown): ChatUser | null {
@@ -350,6 +509,49 @@ export async function markConversationRead(
   });
 }
 
+export async function leaveConversation(
+  conversationId: number,
+): Promise<void> {
+  await api<void>(`${BASE}/chat/conversations/${conversationId}`, {
+    method: "DELETE",
+  });
+}
+
 export function toChatMessage(conversationId: number, raw: unknown): ChatMessage | null {
   return normalizeMessage(conversationId, raw);
+}
+
+function normalizeUnreadEventType(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+export function toConversationUnreadCountEvent(
+  raw: unknown,
+): ConversationUnreadCountEvent | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+
+  const type = normalizeUnreadEventType(obj.type);
+  if (type !== "CONVERSATION_UNREAD_COUNT_UPDATED") return null;
+
+  const conversationId = toFiniteNumber(obj.conversationId);
+  const unreadMessageCount = toFiniteNumber(obj.unreadMessageCount);
+  const totalUnreadMessageCount = toFiniteNumber(obj.totalUnreadMessageCount);
+
+  if (
+    typeof conversationId !== "number" ||
+    typeof unreadMessageCount !== "number" ||
+    typeof totalUnreadMessageCount !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    type: "CONVERSATION_UNREAD_COUNT_UPDATED",
+    conversationId,
+    unreadMessageCount,
+    totalUnreadMessageCount,
+  };
 }

@@ -34,6 +34,48 @@
       radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.1), transparent 36%);
   }
 
+  html {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.56) rgba(226, 232, 240, 0.45);
+  }
+
+  .dark * {
+    scrollbar-color: rgba(71, 85, 105, 0.92) rgba(15, 23, 42, 0.58);
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: rgba(226, 232, 240, 0.45);
+    border-radius: 9999px;
+  }
+
+  .dark *::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.58);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.56);
+    border: 2px solid rgba(226, 232, 240, 0.45);
+    border-radius: 9999px;
+  }
+
+  .dark *::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.92);
+    border-color: rgba(15, 23, 42, 0.58);
+  }
+
   * {
     @apply border-slate-200 dark:border-slate-800;
   }

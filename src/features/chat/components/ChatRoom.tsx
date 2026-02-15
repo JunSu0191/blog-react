@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/shared/ui";
+import { cn } from "@/lib/utils";
+import { ActionDialog, Button } from "@/shared/ui";
+import useActionDialog from "@/shared/hooks/useActionDialog";
 import {
   connect,
   sendChatMessage,
   subscribeChat,
 } from "@/shared/socket/stompClient";
-import { toChatMessage, type ChatMessage } from "../api";
+import { toChatMessage, type ChatConversation, type ChatMessage } from "../api";
 import { useConversationMessages, useMarkConversationRead } from "../queries";
 
 type LocalMessage = ChatMessage & {
@@ -20,6 +22,9 @@ type ChatRoomProps = {
   conversationTitle?: string;
   userDisplayNames?: Record<number, string>;
   onBack?: () => void;
+  onRequestLeaveConversation?: (conversationId: number) => void;
+  isLeavingConversation?: boolean;
+  isMobileFullscreen?: boolean;
   className?: string;
 };
 
@@ -63,10 +68,14 @@ export default function ChatRoom({
   conversationTitle,
   userDisplayNames,
   onBack,
+  onRequestLeaveConversation,
+  isLeavingConversation = false,
+  isMobileFullscreen = false,
   className,
 }: ChatRoomProps) {
   const queryClient = useQueryClient();
   const listRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const pendingTimeoutRef = useRef<Map<string, number>>(new Map());
   const isComposingRef = useRef(false);
   const sendTriggerGuardRef = useRef(false);
@@ -78,6 +87,7 @@ export default function ChatRoom({
   } | null>(null);
   const [composerValue, setComposerValue] = useState("");
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>([]);
+  const noticeDialog = useActionDialog({ defaultTitle: "안내" });
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useConversationMessages(conversationId, currentUserId);
@@ -133,6 +143,17 @@ export default function ChatRoom({
       behavior,
     });
   }, []);
+  const focusComposer = useCallback(() => {
+    const composer = composerRef.current;
+    if (!composer) return;
+    composer.focus({ preventScroll: true });
+    const caretPosition = composer.value.length;
+    try {
+      composer.setSelectionRange(caretPosition, caretPosition);
+    } catch {
+      // 일부 모바일 브라우저에서는 setSelectionRange 호출이 실패할 수 있다.
+    }
+  }, []);
 
   useEffect(() => {
     setLocalMessages([]);
@@ -184,7 +205,7 @@ export default function ChatRoom({
     const hasNewTailMessage = lastMessageKeyRef.current !== latestMessageKey;
     if (hasNewTailMessage && !isFetchingNextPage) {
       window.requestAnimationFrame(() => {
-        scrollToBottom("smooth");
+        scrollToBottom("auto");
       });
     }
 
@@ -257,13 +278,29 @@ export default function ChatRoom({
         ];
       });
       window.requestAnimationFrame(() => {
-        scrollToBottom("smooth");
+        scrollToBottom("auto");
       });
 
       queryClient.invalidateQueries({
         queryKey: ["chat", "messages", conversationId],
       });
-      queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
+      queryClient.setQueriesData<ChatConversation[]>(
+        { queryKey: ["chat", "conversations"] },
+        (prev) => {
+          if (!Array.isArray(prev)) return prev;
+          let hasChanged = false;
+          const next = prev.map((conversation) => {
+            if (conversation.id !== conversationId) return conversation;
+            hasChanged = true;
+            return {
+              ...conversation,
+              lastMessage: message.content,
+              updatedAt: message.createdAt || conversation.updatedAt,
+            };
+          });
+          return hasChanged ? next : prev;
+        },
+      );
     });
 
     return unsubscribe;
@@ -286,7 +323,7 @@ export default function ChatRoom({
     }, 0);
 
     if (typeof currentUserId !== "number") {
-      alert("인증 사용자 정보를 확인한 뒤 다시 시도해주세요.");
+      noticeDialog.show("인증 사용자 정보를 확인한 뒤 다시 시도해주세요.");
       return;
     }
 
@@ -309,7 +346,12 @@ export default function ChatRoom({
         senderId: currentUserId,
       },
     ]);
-    window.requestAnimationFrame(() => scrollToBottom("smooth"));
+    window.requestAnimationFrame(() => {
+      scrollToBottom("auto");
+      if (isMobileFullscreen) {
+        focusComposer();
+      }
+    });
 
     const ok = sendChatMessage(
       conversationId,
@@ -351,16 +393,41 @@ export default function ChatRoom({
       pendingTimeoutRef.current.delete(clientMsgId);
     }, 10000);
     pendingTimeoutRef.current.set(clientMsgId, timeoutId);
-  }, [composerValue, conversationId, currentUserId, scrollToBottom]);
+  }, [
+    composerValue,
+    conversationId,
+    currentUserId,
+    focusComposer,
+    isMobileFullscreen,
+    scrollToBottom,
+  ]);
+
+  const handleSendFromButton = useCallback(() => {
+    handleSend();
+    if (isMobileFullscreen) {
+      window.requestAnimationFrame(() => {
+        focusComposer();
+      });
+    }
+  }, [focusComposer, handleSend, isMobileFullscreen]);
 
   return (
     <div
-      className={[
-        "flex h-[calc(100dvh-9.5rem)] min-h-[420px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.08)] lg:h-[78vh] lg:min-h-[540px] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_18px_38px_-24px_rgba(2,6,23,0.92)]",
-        className || "",
-      ].join(" ")}
+      className={cn(
+        "relative isolate flex min-h-[420px] flex-col overflow-hidden border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900",
+        isMobileFullscreen
+          ? "h-full max-h-full min-h-0 rounded-none border-x-0 border-t-0 shadow-none overscroll-none dark:shadow-none"
+          : "h-[calc(100dvh-9.5rem)] rounded-3xl shadow-[0_10px_26px_rgba(15,23,42,0.08)] lg:h-[78vh] lg:min-h-[540px] dark:shadow-[0_18px_38px_-24px_rgba(2,6,23,0.92)]",
+        className,
+      )}
     >
-      <div className="border-b border-slate-200 bg-white px-3 py-3 sm:px-4 dark:border-slate-700 dark:bg-slate-900">
+      <div
+        className={cn(
+          "border-b border-slate-200 bg-white px-3 py-3 sm:px-4 dark:border-slate-700 dark:bg-slate-900",
+          isMobileFullscreen &&
+            "z-20 shrink-0 border-x-0 pt-[env(safe-area-inset-top)] shadow-sm",
+        )}
+      >
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             {onBack && (
@@ -374,21 +441,46 @@ export default function ChatRoom({
               </button>
             )}
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">
-              {(conversationTitle || `#${conversationId}`).slice(0, 1)}
+              {(conversationTitle || "이름 없는 대화방").slice(0, 1)}
             </span>
             <div className="min-w-0">
               <p className="line-clamp-1 text-sm font-bold text-slate-900 dark:text-slate-100">
-                {conversationTitle || `대화방 #${conversationId}`}
+                {conversationTitle || "이름 없는 대화방"}
               </p>
             </div>
           </div>
+          {onRequestLeaveConversation && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onRequestLeaveConversation(conversationId)}
+              isLoading={isLeavingConversation}
+              loadingText="나가는 중..."
+              className="h-8 rounded-lg border-rose-200 bg-white px-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/30"
+            >
+              나가기
+            </Button>
+          )}
         </div>
       </div>
 
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="flex-1 space-y-2 overflow-y-auto bg-slate-50/70 px-3 py-3 sm:px-4 dark:bg-slate-950/70"
+        className={cn(
+          "min-h-0 space-y-2 overflow-y-auto overscroll-contain bg-slate-50/70 dark:bg-slate-950/70",
+          isMobileFullscreen
+            ? "flex-1 px-2.5 py-2.5"
+            : "flex-1 px-3 py-3 sm:px-4",
+        )}
+        style={
+          isMobileFullscreen
+            ? {
+                WebkitOverflowScrolling: "touch",
+              }
+            : undefined
+        }
       >
         {isFetchingNextPage && (
           <div className="py-1 text-center text-xs text-slate-500 dark:text-slate-400">
@@ -452,10 +544,23 @@ export default function ChatRoom({
         })}
       </div>
 
-      <div className="border-t border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-900">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-2 sm:p-2.5 dark:border-slate-700 dark:bg-slate-800/70">
+      <div
+        className={cn(
+          "border-t border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900",
+          isMobileFullscreen
+            ? "z-20 shrink-0 p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
+            : "p-3 sm:p-4",
+        )}
+      >
+        <div
+          className={cn(
+            "rounded-2xl border border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-800/70 mb-2",
+            isMobileFullscreen ? "p-1.5" : "p-2 sm:p-2.5",
+          )}
+        >
           <div className="flex items-end gap-2">
             <textarea
+              ref={composerRef}
               value={composerValue}
               onChange={(event) => setComposerValue(event.target.value)}
               onCompositionStart={() => {
@@ -478,22 +583,36 @@ export default function ChatRoom({
                 }
               }}
               placeholder="메시지를 입력하세요"
-              rows={2}
-              className="max-h-32 min-h-[46px] flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+              rows={isMobileFullscreen ? 1 : 2}
+              className={cn(
+                "max-h-32 flex-1 resize-none rounded-xl border border-slate-200 bg-white text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500",
+                isMobileFullscreen
+                  ? "min-h-[38px] px-2.5 py-2 text-[16px]"
+                  : "min-h-[46px] px-3 py-2.5 text-sm",
+              )}
             />
             <Button
               type="button"
-              onClick={handleSend}
-              className="h-[46px] shrink-0 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
+              onClick={handleSendFromButton}
+              className={cn(
+                "shrink-0 rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700",
+                isMobileFullscreen
+                  ? "h-[38px] px-3 text-[12px]"
+                  : "h-16 px-4 text-sm",
+              )}
             >
               전송
             </Button>
           </div>
-          <p className="mt-2 px-1 text-[11px] text-slate-500 dark:text-slate-400">
-            Enter 전송 · Shift+Enter 줄바꿈
-          </p>
         </div>
       </div>
+
+      <ActionDialog
+        {...noticeDialog.dialogProps}
+      />
     </div>
   );
 }
