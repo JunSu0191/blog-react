@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/shared/ui";
 import {
+  useNotificationSummary,
   useNotifications,
   useReadAllNotifications,
   useReadNotification,
@@ -11,6 +12,8 @@ import { toNotificationContent } from "../api";
 export type NotificationListProps = {
   compact?: boolean;
 };
+
+const NOTIFICATION_BATCH_SIZE = 30;
 
 function formatDateTime(raw?: string) {
   if (!raw) return "";
@@ -26,18 +29,87 @@ export default function NotificationList({ compact = false }: NotificationListPr
   const navigate = useNavigate();
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useNotifications();
+  const { data: summary } = useNotificationSummary();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(NOTIFICATION_BATCH_SIZE);
   const readMutation = useReadNotification();
   const readAllMutation = useReadAllNotifications();
 
-  const notifications = useMemo(
-    () => (data?.pages || []).flatMap((page) => page.items),
-    [data?.pages],
-  );
+  const notifications = useMemo(() => {
+    const merged = (data?.pages || []).flatMap((page) => page.items);
+    const byId = new Map<number, (typeof merged)[number]>();
+    merged.forEach((item) => {
+      if (typeof item.id === "number") byId.set(item.id, item);
+    });
+    return Array.from(byId.values()).sort((a, b) => b.id - a.id);
+  }, [data?.pages]);
 
-  const unreadCount = useMemo(
+  useEffect(() => {
+    setVisibleCount((prev) =>
+      Math.min(
+        Math.max(NOTIFICATION_BATCH_SIZE, prev),
+        Math.max(NOTIFICATION_BATCH_SIZE, notifications.length),
+      ),
+    );
+  }, [notifications.length]);
+
+  const visibleNotifications = useMemo(
+    () => notifications.slice(0, visibleCount),
+    [notifications, visibleCount],
+  );
+  const hasMoreVisibleItems = visibleCount < notifications.length;
+
+  const loadedUnreadCount = useMemo(
     () => notifications.filter((item) => !item.isRead).length,
     [notifications],
   );
+  const unreadCount =
+    typeof summary?.unreadCount === "number"
+      ? summary.unreadCount
+      : hasNextPage
+        ? undefined
+        : loadedUnreadCount;
+  const unreadCountLabel =
+    typeof unreadCount === "number"
+      ? `${unreadCount}개 읽지 않음`
+      : "읽지 않음 집계 중...";
+
+  useEffect(() => {
+    if (!hasNextPage && !hasMoreVisibleItems) return;
+    const target = loadMoreTriggerRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        if (hasMoreVisibleItems) {
+          setVisibleCount((prev) =>
+            Math.min(prev + NOTIFICATION_BATCH_SIZE, notifications.length),
+          );
+          return;
+        }
+        if (isFetchingNextPage || !hasNextPage) return;
+        void fetchNextPage();
+      },
+      {
+        root: compact ? scrollContainerRef.current : null,
+        rootMargin: "120px 0px",
+        threshold: 0.1,
+      },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [
+    compact,
+    fetchNextPage,
+    hasMoreVisibleItems,
+    hasNextPage,
+    isFetchingNextPage,
+    notifications.length,
+  ]);
 
   const moveToLink = (linkUrl?: string) => {
     if (!linkUrl) return;
@@ -53,19 +125,27 @@ export default function NotificationList({ compact = false }: NotificationListPr
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">알림 {unreadCount}개 읽지 않음</p>
+        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
+          알림 {unreadCountLabel}
+        </p>
         <Button
           type="button"
           size="sm"
           variant="secondary"
           onClick={() => readAllMutation.mutate()}
-          disabled={readAllMutation.isPending || unreadCount === 0}
+          disabled={
+            readAllMutation.isPending ||
+            (typeof unreadCount === "number" && unreadCount === 0)
+          }
         >
           모두 읽음
         </Button>
       </div>
 
-      <div className={compact ? "max-h-[340px] overflow-y-auto" : ""}>
+      <div
+        ref={scrollContainerRef}
+        className={compact ? "max-h-[340px] overflow-y-auto overscroll-contain pr-1" : ""}
+      >
         {isLoading && <p className="py-4 text-center text-sm text-slate-500 dark:text-slate-400">알림 불러오는 중...</p>}
         {error && (
           <p className="rounded-xl border border-rose-200 bg-rose-50 py-3 text-center text-sm font-semibold text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">
@@ -80,7 +160,7 @@ export default function NotificationList({ compact = false }: NotificationListPr
         )}
 
         <div className="space-y-2">
-          {notifications.map((item) => {
+          {visibleNotifications.map((item) => {
             const content = toNotificationContent(item);
             return (
               <button
@@ -114,17 +194,17 @@ export default function NotificationList({ compact = false }: NotificationListPr
           })}
         </div>
 
-        {hasNextPage && (
-          <div className="mt-3 flex justify-center">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-            >
-              {isFetchingNextPage ? "불러오는 중..." : "더 보기"}
-            </Button>
+        {(hasMoreVisibleItems || hasNextPage) && (
+          <div
+            ref={loadMoreTriggerRef}
+            className="mt-2 flex h-8 items-center justify-center"
+            aria-hidden="true"
+          >
+            {isFetchingNextPage && !hasMoreVisibleItems && (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                알림 불러오는 중...
+              </p>
+            )}
           </div>
         )}
       </div>

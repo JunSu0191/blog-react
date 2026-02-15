@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "react-router-dom";
 import { connect, subscribeNotifications } from "@/shared/socket/stompClient";
 import { useAuthContext } from "@/shared/context/useAuthContext";
 import { getToken, getUserId, getUserIdFromToken } from "@/shared/lib/auth";
@@ -9,8 +10,9 @@ import {
   toNotificationContent,
   type NotificationItem,
   type NotificationPage,
+  type NotificationSummary,
 } from "../api";
-import { useNotifications } from "../queries";
+import { notificationSummaryQueryKey, useNotifications } from "../queries";
 
 type RealtimeNotificationExtractResult = {
   item: NotificationItem | null;
@@ -138,6 +140,42 @@ function getToastLevel(item: NotificationItem | null | undefined) {
   return "info" as const;
 }
 
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function extractConversationIdFromNotification(notification: NotificationItem): number | undefined {
+  const payloadConversationId = toFiniteNumber(notification.payload?.conversationId);
+  if (typeof payloadConversationId === "number") return payloadConversationId;
+
+  if (typeof notification.linkUrl !== "string" || notification.linkUrl.length === 0) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(notification.linkUrl, window.location.origin);
+    const conversationId = toFiniteNumber(url.searchParams.get("conversationId"));
+    return conversationId;
+  } catch {
+    return undefined;
+  }
+}
+
+function shouldSuppressChatToast(
+  notification: NotificationItem,
+  activeConversationId?: number,
+): boolean {
+  if (typeof activeConversationId !== "number") return false;
+  if (notification.type !== "CHAT_MESSAGE") return false;
+  const targetConversationId = extractConversationIdFromNotification(notification);
+  return targetConversationId === activeConversationId;
+}
+
 function extractNotification(payload: unknown): RealtimeNotificationExtractResult | null {
   if (!payload || typeof payload !== "object") return null;
   const obj = payload as Record<string, unknown>;
@@ -182,6 +220,7 @@ function extractNotification(payload: unknown): RealtimeNotificationExtractResul
 
 export default function NotificationRealtimeBridge() {
   const { token, user } = useAuthContext();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const effectiveToken = token ?? getToken();
@@ -193,6 +232,13 @@ export default function NotificationRealtimeBridge() {
     typeof user?.id === "number"
       ? user.id
       : getUserId() ?? getUserIdFromToken(effectiveToken) ?? undefined;
+  const activeConversationId = useMemo(() => {
+    if (location.pathname !== "/chat") return undefined;
+    const rawConversationId = new URLSearchParams(location.search).get("conversationId");
+    if (!rawConversationId) return undefined;
+    const parsed = Number(rawConversationId);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (effectiveToken) return;
@@ -243,6 +289,7 @@ export default function NotificationRealtimeBridge() {
 
         showToast(extracted.fallbackMessage || "새 알림이 도착했습니다.", "info");
         void queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
+        void queryClient.invalidateQueries({ queryKey: notificationSummaryQueryKey() });
         return;
       }
       const notification = extracted.item;
@@ -270,10 +317,12 @@ export default function NotificationRealtimeBridge() {
 
       seenNotificationIdsRef.current.add(notification.id);
       const content = toNotificationContent(notification);
-      showToast(
-        content.title || content.body || "새 알림이 도착했습니다.",
-        getToastLevel(notification),
-      );
+      if (!shouldSuppressChatToast(notification, activeConversationId)) {
+        showToast(
+          content.title || content.body || "새 알림이 도착했습니다.",
+          getToastLevel(notification),
+        );
+      }
 
       queryClient.setQueryData(["notifications", "list"], (prev: unknown) => {
         if (!prev || typeof prev !== "object") {
@@ -302,12 +351,22 @@ export default function NotificationRealtimeBridge() {
           pages: [updatedFirst, ...old.pages.slice(1)],
         };
       });
+      queryClient.setQueryData<NotificationSummary | undefined>(
+        notificationSummaryQueryKey(),
+        (prev) => {
+          if (!prev) return prev;
+          return {
+            totalCount: prev.totalCount + 1,
+            unreadCount: prev.unreadCount + (notification.isRead ? 0 : 1),
+          };
+        },
+      );
 
       void queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
     });
 
     return unsubscribe;
-  }, [currentUserId, effectiveToken, queryClient]);
+  }, [activeConversationId, currentUserId, effectiveToken, queryClient, showToast]);
 
   useEffect(() => {
     if (!effectiveToken) return;
@@ -350,9 +409,11 @@ export default function NotificationRealtimeBridge() {
 
       seenNotificationIdsRef.current.add(item.id);
       const content = toNotificationContent(item);
-      showToast(content.title || content.body || "새 알림이 도착했습니다.", getToastLevel(item));
+      if (!shouldSuppressChatToast(item, activeConversationId)) {
+        showToast(content.title || content.body || "새 알림이 도착했습니다.", getToastLevel(item));
+      }
     });
-  }, [effectiveToken, notificationData, showToast]);
+  }, [activeConversationId, effectiveToken, notificationData, showToast]);
 
   return null;
 }

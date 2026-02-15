@@ -30,6 +30,11 @@ export type NotificationPage = {
   hasMore: boolean;
 };
 
+export type NotificationSummary = {
+  totalCount: number;
+  unreadCount: number;
+};
+
 const BASE = API_BASE_URL;
 
 function toFiniteNumber(value: unknown): number | undefined {
@@ -247,4 +252,40 @@ export async function readAllNotifications() {
 
 export function toNotification(raw: unknown): NotificationItem | null {
   return normalizeNotification(raw);
+}
+
+const DEFAULT_SUMMARY_PAGE_SIZE = 200;
+const MAX_SUMMARY_PAGE_FETCHES = 50;
+
+export async function getNotificationSummary(
+  size = DEFAULT_SUMMARY_PAGE_SIZE,
+): Promise<NotificationSummary> {
+  const seenIds = new Set<number>();
+  let totalCount = 0;
+  let unreadCount = 0;
+  let cursorId: number | undefined;
+  let fetchCount = 0;
+
+  while (fetchCount < MAX_SUMMARY_PAGE_FETCHES) {
+    fetchCount += 1;
+    const page = await getNotifications(cursorId, size);
+    const uniqueItems = page.items.filter((item) => {
+      if (seenIds.has(item.id)) return false;
+      seenIds.add(item.id);
+      return true;
+    });
+
+    totalCount += uniqueItems.length;
+    unreadCount += uniqueItems.filter((item) => !item.isRead).length;
+
+    if (!page.hasMore) break;
+    if (typeof page.nextCursorId !== "number") break;
+    if (page.nextCursorId === cursorId) break;
+    cursorId = page.nextCursorId;
+  }
+
+  return {
+    totalCount,
+    unreadCount,
+  };
 }

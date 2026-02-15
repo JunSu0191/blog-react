@@ -2,17 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bell } from "lucide-react";
 import NotificationList from "./NotificationList";
-import { useNotifications } from "../queries";
+import { useNotifications, useNotificationSummary } from "../queries";
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const { data } = useNotifications();
+  const { data: summary } = useNotificationSummary();
 
-  const unreadCount = useMemo(() => {
+  const loadedUnreadCount = useMemo(() => {
     const notifications = (data?.pages || []).flatMap((page) => page.items);
     return notifications.filter((item) => !item.isRead).length;
   }, [data?.pages]);
+  const unreadCount = summary?.unreadCount ?? loadedUnreadCount;
 
   useEffect(() => {
     if (!open) return;
