@@ -24,7 +24,7 @@ const viewModes: Array<{ value: ViewMode; label: string }> = [
 ];
 
 const feedModes: Array<{ value: FeedMode; label: string }> = [
-  { value: "infinite", label: "무한 스크롤" },
+  { value: "infinite", label: "무한" },
   { value: "pagination", label: "페이지" },
 ];
 
@@ -96,8 +96,20 @@ export default function PostFeedControls({
           />
           <SegmentedControl<FeedMode>
             value={feedMode}
-            options={feedModes}
+            options={feedModes.map((mode) => ({
+              value: mode.value,
+              label:
+                mode.value === "infinite" ? (
+                  <>
+                    <span>스크롤</span>
+                  </>
+                ) : (
+                  mode.label
+                ),
+            }))}
             onChange={onFeedModeChange}
+            className="min-w-[170px]"
+            buttonClassName="min-w-[78px] px-2 text-xs sm:min-w-[90px] sm:px-3 sm:text-sm"
           />
         </div>
       </div>

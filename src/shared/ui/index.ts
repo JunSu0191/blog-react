@@ -1,5 +1,6 @@
 export { default as Button } from './Button'
 export { default as Input } from './Input'
+export { default as ActionDialog } from './ActionDialog'
 export { default as Select } from './Select'
 export { default as Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from './Table'
 export { default as RichTextEditor } from './RichTextEditor'
