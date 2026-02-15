@@ -12,6 +12,7 @@ export type Post = {
   userId: number;
   title: string;
   content: string;
+  likeCount?: number;
   deletedYn?: string;
   createdAt?: string;
   attachFiles?: AttachFile[];

@@ -1,7 +1,9 @@
 import { Link, useParams } from "react-router-dom";
 import { useMemo, useState } from "react";
-import { Button } from "@/shared/ui";
+import { ActionDialog, Button } from "@/shared/ui";
+import useActionDialog from "@/shared/hooks/useActionDialog";
 import { CommentList } from "@/features/comment";
+import { PostLikeButton } from "@/features/social";
 import { usePost } from "../queries";
 import { API_BASE_URL } from "@/shared/lib/api";
 import { toApiAbsoluteUrl } from "@/shared/lib/networkRuntime";
@@ -31,21 +33,21 @@ const sharePost = async (title: string, url: string) => {
   try {
     if (navigator.share) {
       await navigator.share({ title, url });
-      return;
+      return null;
     }
 
     await navigator.clipboard.writeText(url);
-    alert("링크를 클립보드에 복사했습니다.");
+    return "링크를 클립보드에 복사했습니다.";
   } catch (error) {
     if (error instanceof Error && (error.name === "AbortError" || error.message.includes("cancel"))) {
-      return;
+      return null;
     }
 
     try {
       await navigator.clipboard.writeText(url);
-      alert("링크를 클립보드에 복사했습니다.");
+      return "링크를 클립보드에 복사했습니다.";
     } catch {
-      alert(`공유에 실패했습니다. 수동으로 복사해주세요:\n${url}`);
+      return `공유에 실패했습니다. 수동으로 복사해주세요:\n${url}`;
     }
   }
 };
@@ -65,6 +67,7 @@ export default function PostDetailPage() {
 
   const { data: post, isLoading, error } = usePost(postId);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const noticeDialog = useActionDialog({ defaultTitle: "안내" });
 
   const plainSummary = useMemo(() => {
     if (!post) return "";
@@ -106,6 +109,10 @@ export default function PostDetailPage() {
           </Link>
 
           <div className="flex items-center gap-2">
+            <PostLikeButton
+              postId={postId}
+              initialLikeCount={post.likeCount ?? 0}
+            />
             <button
               type="button"
               onClick={() => setIsBookmarked((prev) => !prev)}
@@ -120,7 +127,13 @@ export default function PostDetailPage() {
             </button>
             <button
               type="button"
-              onClick={() => void sharePost(post.title, window.location.href)}
+              onClick={() => {
+                void sharePost(post.title, window.location.href).then(
+                  (message) => {
+                    if (message) noticeDialog.show(message);
+                  },
+                );
+              }}
               className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               공유
@@ -208,6 +221,11 @@ export default function PostDetailPage() {
           <CommentList postId={postId} />
         </div>
       </section>
+
+      <ActionDialog
+        {...noticeDialog.dialogProps}
+        contentClassName="whitespace-pre-line text-sm text-slate-500 dark:text-slate-400"
+      />
     </article>
   );
 }

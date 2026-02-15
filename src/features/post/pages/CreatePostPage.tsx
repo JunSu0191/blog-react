@@ -9,7 +9,8 @@ import {
 import type { ChangeEvent, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreatePost } from "../queries";
-import { Button, Input } from "@/shared/ui";
+import { ActionDialog, Button, Input } from "@/shared/ui";
+import useActionDialog from "@/shared/hooks/useActionDialog";
 import { uploadImageWithTus } from "../tusUpload";
 import { getToken } from "@/shared/lib/auth";
 import { API_BASE_URL } from "@/shared/lib/api";
@@ -96,6 +97,7 @@ export default function CreatePostPage() {
   const createPostMutation = useCreatePost();
   const [activeTab, setActiveTab] = useState<ComposeTab>("write");
   const [attachments, setAttachments] = useState<AttachmentUploadItem[]>([]);
+  const noticeDialog = useActionDialog({ defaultTitle: "안내" });
   const [formData, setFormData] = useState({
     title: "",
     content: "",
@@ -258,12 +260,12 @@ export default function CreatePostPage() {
     if (!url) return;
     try {
       await navigator.clipboard.writeText(url);
-      alert("첨부파일 링크를 복사했습니다.");
+      noticeDialog.show("첨부파일 링크를 복사했습니다.");
     } catch (error) {
       console.error("클립보드 복사 실패:", error);
-      alert("클립보드 복사에 실패했습니다.");
+      noticeDialog.show("클립보드 복사에 실패했습니다.");
     }
-  }, []);
+  }, [noticeDialog.show]);
 
   const insertAttachmentLinkToContent = useCallback(
     (item: AttachmentUploadItem) => {
@@ -311,12 +313,12 @@ export default function CreatePostPage() {
     event.preventDefault();
 
     if (!formData.title.trim() || !formData.content.trim()) {
-      alert("제목과 내용을 모두 입력해주세요.");
+      noticeDialog.show("제목과 내용을 모두 입력해주세요.");
       return;
     }
 
     if (isUploadingAttachment) {
-      alert("첨부파일 업로드가 끝난 후 게시해주세요.");
+      noticeDialog.show("첨부파일 업로드가 끝난 후 게시해주세요.");
       return;
     }
 
@@ -344,7 +346,7 @@ export default function CreatePostPage() {
       navigate("/posts");
     } catch (error) {
       console.error("게시글 작성 실패:", error);
-      alert("게시글 작성에 실패했습니다.");
+      noticeDialog.show("게시글 작성에 실패했습니다.");
     }
   };
 
@@ -377,13 +379,17 @@ export default function CreatePostPage() {
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:hidden">
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">본문 길이</p>
+          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+            본문 길이
+          </p>
           <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">
             {plainContentText.length.toLocaleString()}자
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">첨부 완료</p>
+          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+            첨부 완료
+          </p>
           <p className="mt-1 text-sm font-bold text-emerald-700">
             {completeAttachmentCount}개
           </p>
@@ -598,28 +604,38 @@ export default function CreatePostPage() {
 
         <aside className="hidden space-y-4 lg:sticky lg:top-6 lg:block lg:h-fit">
           <section className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_24px_56px_-44px_rgba(15,23,42,0.65)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_26px_62px_-46px_rgba(2,6,23,0.88)] sm:p-5">
-            <h2 className="text-sm font-bold text-slate-700 dark:text-slate-200">작성 상태</h2>
+            <h2 className="text-sm font-bold text-slate-700 dark:text-slate-200">
+              작성 상태
+            </h2>
             <div className="mt-3 space-y-2.5 text-sm">
               <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
-                <span className="text-slate-500 dark:text-slate-400">제목 길이</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  제목 길이
+                </span>
                 <span className="font-bold text-slate-800 dark:text-slate-100">
                   {formData.title.trim().length}자
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
-                <span className="text-slate-500 dark:text-slate-400">본문 길이</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  본문 길이
+                </span>
                 <span className="font-bold text-slate-800 dark:text-slate-100">
                   {plainContentText.length.toLocaleString()}자
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
-                <span className="text-slate-500 dark:text-slate-400">첨부 완료</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  첨부 완료
+                </span>
                 <span className="font-bold text-emerald-700">
                   {completeAttachmentCount}개
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
-                <span className="text-slate-500 dark:text-slate-400">첨부 실패</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  첨부 실패
+                </span>
                 <span className="font-bold text-rose-700">
                   {failedAttachmentCount}개
                 </span>
@@ -628,7 +644,9 @@ export default function CreatePostPage() {
           </section>
 
           <section className="rounded-3xl border border-slate-200/80 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5">
-            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">발행 액션</h2>
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+              발행 액션
+            </h2>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
               업로드 완료 후 게시하기가 활성화됩니다.
             </p>
@@ -673,10 +691,15 @@ export default function CreatePostPage() {
             </Button>
           </div>
           <p className="mt-2 text-center text-[11px] text-slate-500 dark:text-slate-400">
-            첨부 완료 {completeAttachmentCount}개 · 실패 {failedAttachmentCount}개
+            첨부 완료 {completeAttachmentCount}개 · 실패 {failedAttachmentCount}
+            개
           </p>
         </div>
       </form>
+
+      <ActionDialog
+        {...noticeDialog.dialogProps}
+      />
     </div>
   );
 }

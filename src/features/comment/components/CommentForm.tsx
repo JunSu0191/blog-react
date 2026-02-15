@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Button } from "@/shared/ui";
+import { ActionDialog, Button } from "@/shared/ui";
+import useActionDialog from "@/shared/hooks/useActionDialog";
 import { useCreateComment } from "../queries";
 import type { CommentCreateRequest } from "../api";
 
@@ -9,13 +10,14 @@ interface CommentFormProps {
 
 export default function CommentForm({ postId }: CommentFormProps) {
   const [content, setContent] = useState("");
+  const noticeDialog = useActionDialog({ defaultTitle: "안내" });
   const createCommentMutation = useCreateComment();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!content.trim()) {
-      alert("댓글 내용을 입력해주세요");
+      noticeDialog.show("댓글 내용을 입력해주세요.");
       return;
     }
 
@@ -27,6 +29,7 @@ export default function CommentForm({ postId }: CommentFormProps) {
       setContent("");
     } catch (error) {
       console.error("댓글 생성 실패:", error);
+      noticeDialog.show("댓글 작성에 실패했습니다. 잠시 후 다시 시도해주세요.");
     }
   };
 
@@ -54,6 +57,10 @@ export default function CommentForm({ postId }: CommentFormProps) {
           댓글 작성에 실패했습니다.
         </p>
       )}
+
+      <ActionDialog
+        {...noticeDialog.dialogProps}
+      />
     </form>
   );
 }

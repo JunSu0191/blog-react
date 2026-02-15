@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Button } from "@/shared/ui";
+import { ActionDialog, Button } from "@/shared/ui";
+import useActionDialog from "@/shared/hooks/useActionDialog";
+import { CommentReactionButtons } from "@/features/social";
 import { useDeleteComment, useUpdateComment } from "../queries";
 import type { CommentResponse } from "../api";
 
@@ -20,6 +22,8 @@ const formatDateTime = (raw: string) =>
 export default function CommentItem({ comment, isOwner }: CommentItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const noticeDialog = useActionDialog({ defaultTitle: "안내" });
   const updateMutation = useUpdateComment();
   const deleteMutation = useDeleteComment();
 
@@ -29,7 +33,7 @@ export default function CommentItem({ comment, isOwner }: CommentItemProps) {
 
   const handleUpdate = async () => {
     if (!editContent.trim()) {
-      alert("댓글 내용을 입력해주세요");
+      noticeDialog.show("댓글 내용을 입력해주세요.");
       return;
     }
 
@@ -42,16 +46,17 @@ export default function CommentItem({ comment, isOwner }: CommentItemProps) {
       setIsEditing(false);
     } catch (error) {
       console.error("댓글 수정 실패:", error);
+      noticeDialog.show("댓글 수정에 실패했습니다. 잠시 후 다시 시도해주세요.");
     }
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm("댓글을 삭제하시겠습니까?")) return;
-
+  const handleDeleteConfirm = async () => {
     try {
       await deleteMutation.mutateAsync({ id: comment.id, postId: comment.postId });
+      setIsDeleteDialogOpen(false);
     } catch (error) {
       console.error("댓글 삭제 실패:", error);
+      noticeDialog.show("댓글 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
     }
   };
 
@@ -74,7 +79,7 @@ export default function CommentItem({ comment, isOwner }: CommentItemProps) {
               type="button"
               size="sm"
               variant="outline"
-              onClick={handleDelete}
+              onClick={() => setIsDeleteDialogOpen(true)}
               isLoading={deleteMutation.isPending}
               className="rounded-lg border-rose-200 bg-rose-50 text-xs text-rose-700 hover:bg-rose-100"
             >
@@ -115,6 +120,39 @@ export default function CommentItem({ comment, isOwner }: CommentItemProps) {
       ) : (
         <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">{comment.content}</p>
       )}
+
+      <CommentReactionButtons
+        commentId={comment.id}
+        postId={comment.postId}
+        initialLikeCount={comment.likeCount}
+        initialDislikeCount={comment.dislikeCount}
+        initialMyReaction={comment.myReaction}
+      />
+
+      <ActionDialog
+        open={isDeleteDialogOpen}
+        title="댓글 삭제"
+        content="댓글을 삭제하면 복구할 수 없습니다."
+        cancelText="취소"
+        confirmText={deleteMutation.isPending ? "삭제 중..." : "삭제"}
+        confirmDisabled={deleteMutation.isPending}
+        cancelDisabled={deleteMutation.isPending}
+        preventAutoCloseOnConfirm
+        onConfirm={() => {
+          void handleDeleteConfirm();
+        }}
+        onOpenChange={(open) => {
+          if (deleteMutation.isPending) return;
+          setIsDeleteDialogOpen(open);
+        }}
+        confirmClassName="rounded-xl bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-200"
+        cancelClassName="rounded-xl border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        footerClassName="gap-2 sm:space-x-0"
+      />
+
+      <ActionDialog
+        {...noticeDialog.dialogProps}
+      />
     </div>
   );
 }

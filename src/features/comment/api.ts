@@ -29,28 +29,80 @@ export interface CommentResponse {
   updatedAt: string;
   deletedYn: string;
   likeCount: number;
+  dislikeCount: number;
+  myReaction: "LIKE" | "DISLIKE" | "NONE" | null;
   replies: any[];
 }
 
 const BASE = API_BASE_URL;
 
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
 function normalizeCommentResponse(raw: unknown): CommentResponse {
   if (raw && typeof raw === "object" && "data" in (raw as Record<string, unknown>)) {
     const nested = (raw as { data?: unknown }).data;
     if (nested && typeof nested === "object") {
-      return nested as CommentResponse;
+      return normalizeCommentResponse(nested);
     }
   }
-  return raw as CommentResponse;
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const rawReaction = typeof obj.myReaction === "string" ? obj.myReaction.toUpperCase() : null;
+  const myReaction =
+    rawReaction === "LIKE" || rawReaction === "DISLIKE" || rawReaction === "NONE"
+      ? rawReaction
+      : null;
+
+  return {
+    id: toFiniteNumber(obj.id) ?? 0,
+    postId: toFiniteNumber(obj.postId) ?? 0,
+    userId: toFiniteNumber(obj.userId) ?? 0,
+    name: typeof obj.name === "string" ? obj.name : "익명",
+    parentId:
+      typeof toFiniteNumber(obj.parentId) === "number"
+        ? (toFiniteNumber(obj.parentId) as number)
+        : obj.parentId === null
+          ? null
+          : null,
+    content: typeof obj.content === "string" ? obj.content : "",
+    createdAt:
+      typeof obj.createdAt === "string"
+        ? obj.createdAt
+        : new Date().toISOString(),
+    updatedAt:
+      typeof obj.updatedAt === "string"
+        ? obj.updatedAt
+        : typeof obj.createdAt === "string"
+          ? obj.createdAt
+          : new Date().toISOString(),
+    deletedYn: typeof obj.deletedYn === "string" ? obj.deletedYn : "N",
+    likeCount:
+      typeof obj.likeCount === "number"
+        ? Math.max(0, Math.floor(obj.likeCount))
+        : 0,
+    dislikeCount:
+      typeof obj.dislikeCount === "number"
+        ? Math.max(0, Math.floor(obj.dislikeCount))
+        : 0,
+    myReaction,
+    replies: Array.isArray(obj.replies) ? obj.replies : [],
+  };
 }
 
 // 댓글 목록 조회
 export async function getComments(postId: number): Promise<CommentResponse[]> {
   try {
-    const response = await api<CommentResponse[]>(
+    const response = await api<unknown>(
       `${BASE}/comments/posts/${postId}`
     );
-    return response || [];
+    if (!Array.isArray(response)) return [];
+    return response.map((item) => normalizeCommentResponse(item));
   } catch (error) {
     console.error("댓글 조회 실패:", error);
     return [];

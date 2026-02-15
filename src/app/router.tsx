@@ -10,6 +10,7 @@ const RegisterPage = lazy(() => import("../features/user/pages/RegisterPage"));
 const PostListPage = lazy(() => import("../features/post/pages/PostListPage"));
 const CreatePostPage = lazy(() => import("../features/post/pages/CreatePostPage"));
 const PostDetailPage = lazy(() => import("../features/post/pages/PostDetailPage"));
+const MyPage = lazy(() => import("../features/social/pages/MyPage"));
 const ChatPage = lazy(() => import("../features/chat/pages/ChatPage"));
 const NotificationsPage = lazy(() => import("../features/notifications/pages/NotificationsPage"));
 
@@ -77,6 +78,16 @@ export default function AppRouter() {
                   <RequireAuth>
                     <LazyRoute>
                       <PostDetailPage />
+                    </LazyRoute>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/mypage"
+                element={
+                  <RequireAuth>
+                    <LazyRoute>
+                      <MyPage />
                     </LazyRoute>
                   </RequireAuth>
                 }
