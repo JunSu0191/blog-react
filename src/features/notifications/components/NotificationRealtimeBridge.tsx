@@ -18,9 +18,11 @@ type RealtimeNotificationExtractResult = {
   item: NotificationItem | null;
   fallbackMessage?: string;
   dedupeSignature?: string;
+  createdAt?: string;
 };
 
 const TOAST_DEDUPE_TTL_MS = 10_000;
+const TOAST_BOOTSTRAP_SUPPRESS_MS = 8_000;
 
 function toNonEmptyString(value: unknown): string | undefined {
   if (typeof value === "string") {
@@ -149,6 +151,30 @@ function toFiniteNumber(value: unknown): number | undefined {
   return undefined;
 }
 
+function toTimestamp(value?: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function shouldSuppressToastOnSessionBootstrap(
+  sessionStartedAt: number | null,
+  createdAt?: string,
+) {
+  if (typeof sessionStartedAt !== "number") return false;
+  const now = Date.now();
+  if (now - sessionStartedAt < TOAST_BOOTSTRAP_SUPPRESS_MS) {
+    return true;
+  }
+
+  const createdAtTimestamp = toTimestamp(createdAt);
+  if (typeof createdAtTimestamp === "number" && createdAtTimestamp <= sessionStartedAt) {
+    return true;
+  }
+
+  return false;
+}
+
 function extractConversationIdFromNotification(notification: NotificationItem): number | undefined {
   const payloadConversationId = toFiniteNumber(notification.payload?.conversationId);
   if (typeof payloadConversationId === "number") return payloadConversationId;
@@ -201,6 +227,7 @@ function extractNotification(payload: unknown): RealtimeNotificationExtractResul
     return {
       item,
       dedupeSignature: buildSignatureFromItem(item),
+      createdAt: item.createdAt,
     };
   }
 
@@ -215,6 +242,7 @@ function extractNotification(payload: unknown): RealtimeNotificationExtractResul
     item: null,
     fallbackMessage: fallbackBody || "새 알림이 도착했습니다.",
     dedupeSignature: buildSignatureFromCandidate(candidate),
+    createdAt: toNonEmptyString(candidate.createdAt),
   };
 }
 
@@ -228,6 +256,8 @@ export default function NotificationRealtimeBridge() {
   const isInitialLoadRef = useRef(false);
   const seenNotificationIdsRef = useRef<Set<number>>(new Set());
   const recentToastDedupeRef = useRef<Map<string, number>>(new Map());
+  const toastSessionStartedAtRef = useRef<number | null>(null);
+  const activeTokenRef = useRef<string | null>(null);
   const currentUserId =
     typeof user?.id === "number"
       ? user.id
@@ -245,7 +275,24 @@ export default function NotificationRealtimeBridge() {
     isInitialLoadRef.current = false;
     seenNotificationIdsRef.current.clear();
     recentToastDedupeRef.current.clear();
-  }, [effectiveToken]);
+    toastSessionStartedAtRef.current = null;
+    activeTokenRef.current = null;
+    queryClient.removeQueries({ queryKey: ["notifications", "list"] });
+    queryClient.removeQueries({ queryKey: notificationSummaryQueryKey() });
+  }, [effectiveToken, queryClient]);
+
+  useEffect(() => {
+    if (!effectiveToken) return;
+    if (activeTokenRef.current !== effectiveToken) {
+      activeTokenRef.current = effectiveToken;
+      toastSessionStartedAtRef.current = Date.now();
+      isInitialLoadRef.current = false;
+      seenNotificationIdsRef.current.clear();
+      recentToastDedupeRef.current.clear();
+      queryClient.removeQueries({ queryKey: ["notifications", "list"] });
+      queryClient.removeQueries({ queryKey: notificationSummaryQueryKey() });
+    }
+  }, [effectiveToken, queryClient]);
 
   useEffect(() => {
     if (!effectiveToken) {
@@ -287,7 +334,13 @@ export default function NotificationRealtimeBridge() {
           rememberDedupeKeys(recentToastDedupeRef.current, fallbackKeys);
         }
 
-        showToast(extracted.fallbackMessage || "새 알림이 도착했습니다.", "info");
+        const shouldSuppressToast = shouldSuppressToastOnSessionBootstrap(
+          toastSessionStartedAtRef.current,
+          extracted.createdAt,
+        );
+        if (!shouldSuppressToast) {
+          showToast(extracted.fallbackMessage || "새 알림이 도착했습니다.", "info");
+        }
         void queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
         void queryClient.invalidateQueries({ queryKey: notificationSummaryQueryKey() });
         return;
@@ -317,7 +370,12 @@ export default function NotificationRealtimeBridge() {
 
       seenNotificationIdsRef.current.add(notification.id);
       const content = toNotificationContent(notification);
-      if (!shouldSuppressChatToast(notification, activeConversationId)) {
+      const shouldSuppressToast =
+        shouldSuppressToastOnSessionBootstrap(
+          toastSessionStartedAtRef.current,
+          notification.createdAt,
+        ) || shouldSuppressChatToast(notification, activeConversationId);
+      if (!shouldSuppressToast) {
         showToast(
           content.title || content.body || "새 알림이 도착했습니다.",
           getToastLevel(notification),
@@ -409,7 +467,12 @@ export default function NotificationRealtimeBridge() {
 
       seenNotificationIdsRef.current.add(item.id);
       const content = toNotificationContent(item);
-      if (!shouldSuppressChatToast(item, activeConversationId)) {
+      const shouldSuppressToast =
+        shouldSuppressToastOnSessionBootstrap(
+          toastSessionStartedAtRef.current,
+          item.createdAt,
+        ) || shouldSuppressChatToast(item, activeConversationId);
+      if (!shouldSuppressToast) {
         showToast(content.title || content.body || "새 알림이 도착했습니다.", getToastLevel(item));
       }
     });
