@@ -1,4 +1,9 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type {
+  HTMLAttributes,
+  ReactNode,
+  TdHTMLAttributes,
+  ThHTMLAttributes,
+} from "react";
 import {
   Table as ShadcnTable,
   TableBody as ShadcnTableBody,
@@ -76,7 +81,10 @@ export function TableRow({
 }: TableRowProps) {
   return (
     <ShadcnTableRow
-      className={cn("transition-colors duration-200 hover:bg-slate-50/80 dark:hover:bg-slate-900/70", className)}
+      className={cn(
+        "transition-colors duration-200 hover:bg-blue-50/55 dark:hover:bg-blue-950/20",
+        className,
+      )}
       {...props}
     >
       {children}
@@ -85,7 +93,7 @@ export function TableRow({
 }
 
 // Table Header Cell
-interface TableHeaderProps extends HTMLAttributes<HTMLTableCellElement> {
+interface TableHeaderProps extends ThHTMLAttributes<HTMLTableCellElement> {
   children: ReactNode;
 }
 
@@ -108,7 +116,7 @@ export function TableHeader({
 }
 
 // Table Cell
-interface TableCellProps extends HTMLAttributes<HTMLTableCellElement> {
+interface TableCellProps extends TdHTMLAttributes<HTMLTableCellElement> {
   children: ReactNode;
 }
 

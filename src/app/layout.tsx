@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMemo, type ReactNode } from "react";
-import { Bell, Home, MessageCircle, UserRound } from "lucide-react";
+import { Bell, Home, MessageCircle, Shield, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback, Badge } from "@/components/ui";
 import { useAuthContext } from "../shared/context/useAuthContext";
 import { Button, ThemeToggle } from "../shared/ui";
@@ -35,6 +35,7 @@ type MobileBottomTab = {
   label: string;
   path: string;
   icon: (props: MobileTabIconProps) => ReactNode;
+  adminOnly?: boolean;
 };
 
 const defaultMenuItems: MenuItem[] = [
@@ -80,11 +81,21 @@ function MyPageIcon({ active }: MobileTabIconProps) {
   );
 }
 
+function AdminIcon({ active }: MobileTabIconProps) {
+  return (
+    <Shield
+      className={["h-5 w-5 transition", active ? "scale-[1.03]" : ""].join(" ")}
+      aria-hidden="true"
+    />
+  );
+}
+
 const mobileBottomTabs: MobileBottomTab[] = [
   { label: "홈", path: "/posts", icon: HomeIcon },
   { label: "채팅", path: "/chat", icon: ChatIcon },
   { label: "알림", path: "/notifications", icon: NotificationIcon },
   { label: "마이", path: "/mypage", icon: MyPageIcon },
+  { label: "관리", path: "/admin/dashboard", icon: AdminIcon, adminOnly: true },
 ];
 
 export default function Layout({
@@ -127,6 +138,14 @@ export default function Layout({
     return notifications.filter((item) => !item.isRead).length;
   }, [notificationData?.pages, notificationSummary?.unreadCount, token]);
   const unreadChatCount = token ? chatUnreadCount : 0;
+  const isAdminUser = user?.role?.toUpperCase() === "ADMIN";
+  const resolvedMenuItems = useMemo(() => {
+    const normalizedRole = user?.role?.toUpperCase();
+    if (normalizedRole !== "ADMIN") return menuItems;
+    const hasAdmin = menuItems.some((item) => item.path === "/admin/dashboard");
+    if (hasAdmin) return menuItems;
+    return [...menuItems, { label: "관리자", path: "/admin/dashboard" }];
+  }, [menuItems, user?.role]);
 
   const isMenuActive = (path: string) => {
     if (path === "/posts") {
@@ -135,6 +154,9 @@ export default function Layout({
         /^\/posts\/\d+$/.test(location.pathname)
       );
     }
+    if (path === "/admin/dashboard") {
+      return location.pathname.startsWith("/admin");
+    }
     return location.pathname === path;
   };
 
@@ -142,6 +164,13 @@ export default function Layout({
     Boolean(token) && location.pathname !== "/posts/create";
   const shouldHideMobileChatChrome = isMobileChatConversationOpen;
   const shouldUseRouteEnter = location.pathname !== "/chat";
+  const visibleMobileBottomTabs = useMemo(
+    () =>
+      mobileBottomTabs.filter((tab) =>
+        tab.adminOnly ? isAdminUser : true,
+      ),
+    [isAdminUser],
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
@@ -165,7 +194,7 @@ export default function Layout({
           </Link>
 
           <nav className="hidden items-center gap-2 md:flex">
-            {menuItems.map((item) => {
+            {resolvedMenuItems.map((item) => {
               const isActive = isMenuActive(item.path);
               const showChatUnreadBadge =
                 item.path === "/chat" && unreadChatCount > 0;
@@ -282,8 +311,16 @@ export default function Layout({
               : "translate-y-0 opacity-100",
           ].join(" ")}
         >
-          <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
-            {mobileBottomTabs.map((tab) => {
+          <div
+            className="mx-auto grid max-w-md gap-2"
+            style={{
+              gridTemplateColumns: `repeat(${Math.max(
+                visibleMobileBottomTabs.length,
+                1,
+              )}, minmax(0, 1fr))`,
+            }}
+          >
+            {visibleMobileBottomTabs.map((tab) => {
               const isActive = isMenuActive(tab.path);
               const Icon = tab.icon;
               const badgeCount =

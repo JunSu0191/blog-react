@@ -1,18 +1,29 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { useAuthContext } from "../shared/context/useAuthContext";
-import { getToken } from "../shared/lib/auth";
 import Layout from "./layout";
 import type { ReactElement } from "react";
+import { AdminGuard, RequireAuth } from "./guards";
 
 const LoginPage = lazy(() => import("../features/user/pages/LoginPage"));
 const RegisterPage = lazy(() => import("../features/user/pages/RegisterPage"));
+const ForbiddenPage = lazy(() => import("../features/user/pages/ForbiddenPage"));
+const ChangePasswordRequiredPage = lazy(
+  () => import("../features/user/pages/ChangePasswordRequiredPage"),
+);
 const PostListPage = lazy(() => import("../features/post/pages/PostListPage"));
 const CreatePostPage = lazy(() => import("../features/post/pages/CreatePostPage"));
 const PostDetailPage = lazy(() => import("../features/post/pages/PostDetailPage"));
 const MyPage = lazy(() => import("../features/social/pages/MyPage"));
 const ChatPage = lazy(() => import("../features/chat/pages/ChatPage"));
 const NotificationsPage = lazy(() => import("../features/notifications/pages/NotificationsPage"));
+const AdminDashboardPage = lazy(
+  () => import("../features/admin/pages/AdminDashboardPage"),
+);
+const AdminUsersPage = lazy(() => import("../features/admin/pages/AdminUsersPage"));
+const AdminPostsPage = lazy(() => import("../features/admin/pages/AdminPostsPage"));
+const AdminCommentsPage = lazy(
+  () => import("../features/admin/pages/AdminCommentsPage"),
+);
 
 function RouteLoader() {
   return (
@@ -112,21 +123,72 @@ export default function AppRouter() {
                   </RequireAuth>
                 }
               />
+              <Route
+                path="/change-password"
+                element={
+                  <RequireAuth>
+                    <LazyRoute>
+                      <ChangePasswordRequiredPage />
+                    </LazyRoute>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/403"
+                element={
+                  <LazyRoute>
+                    <ForbiddenPage />
+                  </LazyRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={<Navigate to="/admin/dashboard" replace />}
+              />
+              <Route
+                path="/admin/dashboard"
+                element={
+                  <AdminGuard>
+                    <LazyRoute>
+                      <AdminDashboardPage />
+                    </LazyRoute>
+                  </AdminGuard>
+                }
+              />
+              <Route
+                path="/admin/users"
+                element={
+                  <AdminGuard>
+                    <LazyRoute>
+                      <AdminUsersPage />
+                    </LazyRoute>
+                  </AdminGuard>
+                }
+              />
+              <Route
+                path="/admin/posts"
+                element={
+                  <AdminGuard>
+                    <LazyRoute>
+                      <AdminPostsPage />
+                    </LazyRoute>
+                  </AdminGuard>
+                }
+              />
+              <Route
+                path="/admin/comments"
+                element={
+                  <AdminGuard>
+                    <LazyRoute>
+                      <AdminCommentsPage />
+                    </LazyRoute>
+                  </AdminGuard>
+                }
+              />
             </Routes>
           </Layout>
         }
       />
     </Routes>
   );
-}
-
-function RequireAuth({ children }: { children: ReactElement }) {
-  try {
-    const { token } = useAuthContext();
-    const effectiveToken = token ?? getToken();
-    if (!effectiveToken) return <Navigate to="/login" replace />;
-    return children;
-  } catch {
-    return <Navigate to="/login" replace />;
-  }
 }
