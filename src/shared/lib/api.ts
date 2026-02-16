@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosHeaders } from "axios";
 import type { AxiosRequestConfig } from "axios";
 import {
   clearAuthStorage,
@@ -17,12 +17,15 @@ import { normalizeApiBaseUrl } from "./networkRuntime";
 export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL as string | undefined);
 
 // 백엔드 API 응답 형식
-export type ApiResponse<T = unknown> = {
+export type ApiResponseTemplate<T = unknown> = {
   status: string | number;
   success: boolean;
   message?: string;
   data: T | null;
 };
+
+// 하위 호환 별칭
+export type ApiResponse<T = unknown> = ApiResponseTemplate<T>;
 
 export type ApiError = {
   status?: number | string;
@@ -37,6 +40,7 @@ type TokenRefreshResponse = {
 };
 
 let refreshPromise: Promise<string | null> | null = null;
+const apiClient = axios.create();
 
 function shouldBypassRefresh(url: string) {
   return /\/auth\/(login|register|refresh)(\/|$)/.test(url);
@@ -49,7 +53,7 @@ function isAuthEndpoint(url: string) {
 function normalizeRefreshPayload(raw: unknown): TokenRefreshResponse | null {
   if (!raw || typeof raw !== "object") return null;
 
-  const wrapped = raw as ApiResponse<TokenRefreshResponse>;
+  const wrapped = raw as ApiResponseTemplate<TokenRefreshResponse>;
   if ("success" in wrapped && "data" in wrapped) {
     if (!wrapped.success || !wrapped.data) return null;
     return wrapped.data;
@@ -59,6 +63,45 @@ function normalizeRefreshPayload(raw: unknown): TokenRefreshResponse | null {
   if (typeof direct.token !== "string" || !direct.token) return null;
   return direct;
 }
+
+function redirectTo(path: string) {
+  if (typeof window === "undefined") return;
+  if (window.location.pathname === path) return;
+  window.location.replace(path);
+}
+
+function handleUnauthorizedRedirect() {
+  clearAuthStorage();
+  redirectTo("/login");
+}
+
+function handleForbiddenRedirect() {
+  redirectTo("/403");
+}
+
+apiClient.interceptors.request.use((config) => {
+  const url = typeof config.url === "string" ? config.url : "";
+  const bypassRefresh = shouldBypassRefresh(url);
+  const authEndpoint = isAuthEndpoint(url);
+  const headers = {
+    ...((config.headers as Record<string, string> | undefined) ?? {}),
+  };
+  const token = getToken();
+
+  if (token && !headers.Authorization && !bypassRefresh) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (!authEndpoint && !headers["X-User-Id"] && !headers["x-user-id"]) {
+    const resolvedUserId = getUserIdFromToken(token) ?? getUserId();
+    if (typeof resolvedUserId === "number") {
+      headers["X-User-Id"] = String(resolvedUserId);
+    }
+  }
+
+  config.headers = AxiosHeaders.from(headers);
+  return config;
+});
 
 async function refreshAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
@@ -111,23 +154,12 @@ async function requestApi<T = unknown>(
       throw { status: 401, message: "인증이 필요합니다." } as ApiError;
     }
 
-    const headers = {
-      ...((init?.headers as Record<string, string> | undefined) ?? {}),
-    };
-    if (token && !headers.Authorization && !bypassRefresh) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-    if (!authEndpoint && !headers["X-User-Id"] && !headers["x-user-id"]) {
-      const resolvedUserId = getUserIdFromToken(token) ?? getUserId();
-      if (typeof resolvedUserId === "number") {
-        headers["X-User-Id"] = String(resolvedUserId);
-      }
-    }
-
-    const res = await axios.request<unknown>({
+    const res = await apiClient.request<unknown>({
       ...init,
       url: input,
-      headers,
+      headers: {
+        ...((init?.headers as Record<string, string> | undefined) ?? {}),
+      },
     });
 
     if (res.status === 204 || typeof res.data === "undefined" || res.data === null) {
@@ -141,7 +173,7 @@ async function requestApi<T = unknown>(
       "success" in res.data &&
       "data" in res.data
     ) {
-      const apiRes = res.data as ApiResponse<T>;
+      const apiRes = res.data as ApiResponseTemplate<T>;
 
       if (!apiRes.success) {
         const message = apiRes.message || "요청에 실패했습니다";
@@ -165,7 +197,10 @@ async function requestApi<T = unknown>(
           const refreshed = await refreshAccessToken();
           if (refreshed) return requestApi<T>(input, init, true);
         }
-        clearAuthStorage();
+        handleUnauthorizedRedirect();
+      }
+      if (status === 403 && !bypassRefresh) {
+        handleForbiddenRedirect();
       }
       throw err;
     }
@@ -173,7 +208,7 @@ async function requestApi<T = unknown>(
     // axios 에러 처리
     if (axios.isAxiosError(err)) {
       const status = err.response?.status;
-      const responseData = err.response?.data as ApiResponse | undefined;
+      const responseData = err.response?.data as ApiResponseTemplate | undefined;
 
       // 서버 응답에서 메시지 추출 (responseData.message 우선, 그 다음 axios 기본 메시지)
       let message = err.message;
@@ -193,7 +228,13 @@ async function requestApi<T = unknown>(
           const refreshed = await refreshAccessToken();
           if (refreshed) return requestApi<T>(input, init, true);
         }
-        clearAuthStorage();
+        if (!bypassRefresh) {
+          handleUnauthorizedRedirect();
+        }
+      }
+
+      if (status === 403 && !bypassRefresh) {
+        handleForbiddenRedirect();
       }
 
       throw apiError;

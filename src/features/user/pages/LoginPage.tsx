@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuthContext } from "../../../shared/context/useAuthContext";
 import { Input, Button, ThemeToggle } from "../../../shared/ui";
+import { parseErrorMessage } from "@/shared/lib/errorParser";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -37,10 +38,8 @@ export default function LoginPage() {
     try {
       await doLogin(username, password);
       navigate("/posts");
-    } catch (error: any) {
-      console.log("Login error caught:", error);
-      console.log("Error message:", error?.message);
-      setError(error?.message ?? "로그인에 실패했습니다");
+    } catch (error: unknown) {
+      setError(parseErrorMessage(error, "로그인에 실패했습니다"));
     } finally {
       setIsLoading(false);
     }
