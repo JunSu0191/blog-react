@@ -19,6 +19,22 @@ export default function PostFeedPagination({
   last,
   onPageChange,
 }: PostFeedPaginationProps) {
+  const scrollToTop = () => {
+    if (typeof window === "undefined") return;
+    const prefersReducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    window.scrollTo({
+      top: 0,
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    onPageChange(nextPage);
+    scrollToTop();
+  };
+
   return (
     <SurfaceCard className="flex flex-wrap items-center justify-between gap-3 px-4 py-3" padded="none">
       <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -30,7 +46,7 @@ export default function PostFeedPagination({
           type="button"
           variant="secondary"
           size="sm"
-          onClick={() => onPageChange(pageNumber - 1)}
+          onClick={() => handlePageChange(pageNumber - 1)}
           disabled={first}
         >
           이전
@@ -42,7 +58,7 @@ export default function PostFeedPagination({
           type="button"
           variant="secondary"
           size="sm"
-          onClick={() => onPageChange(pageNumber + 1)}
+          onClick={() => handlePageChange(pageNumber + 1)}
           disabled={last}
         >
           다음
