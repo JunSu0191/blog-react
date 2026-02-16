@@ -33,6 +33,7 @@
 | 채팅 | 대화방/메시지/읽음/나가기 | STOMP 실시간 수신, unread 이벤트 반영, 불변 캐시 업데이트 |
 | 알림 | 드롭다운/목록/읽음/전체읽음 | 실시간 수신, 미읽음 요약 캐시, 자동 무한 스크롤 |
 | 마이페이지 | 프로필/통계/활동 내역 | 병렬 로딩, 낙관적 프로필 갱신 |
+| 관리자 | 대시보드/사용자/게시글/댓글 관리 | `/api/auth/me` role/status 가드, pageable 쿼리, 확인 모달 + 토스트 |
 
 ## 아키텍처
 
@@ -184,6 +185,16 @@ npm run preview
 - `snake_case`/`camelCase` 필드 혼용
 - 일부 엔드포인트의 구조 편차
 
+### 관리자 API 정책
+
+- 관리자 API 경로: `/api/admin/**`
+- 관리자 라우트 접근 가드:
+  - `role !== ADMIN` 또는 `status === SUSPENDED` -> `/403`
+  - `mustChangePassword === true` -> `/change-password`
+  - `401` -> 인증 스토리지 정리 후 `/login`
+- 목록 API는 Spring pageable 표준(`page`, `size`, `sort`)과 동기화
+- 변경 액션(role/status/hide/restore)은 확인 모달 후 실행, 성공 시 관련 query key를 invalidate
+
 ## 모바일 UX 포인트
 
 - `viewport-fit=cover`, `interactive-widget=resizes-content` 기반 뷰포트 대응
@@ -209,6 +220,20 @@ npm run preview
 | `/chat` | 채팅 |
 | `/notifications` | 알림 목록 |
 | `/mypage` | 마이페이지 |
+| `/403` | 권한 없음 |
+| `/change-password` | 비밀번호 변경 필요 안내 |
+| `/admin/dashboard` | 관리자 대시보드 |
+| `/admin/users` | 관리자 사용자 관리 |
+| `/admin/posts` | 관리자 게시글 관리 |
+| `/admin/comments` | 관리자 댓글 관리 |
+
+## 관리자 콘솔 사용 가이드
+
+1. ADMIN 권한 계정으로 로그인합니다.
+2. 상단 네비게이션의 `관리자` 메뉴(또는 `/admin/dashboard`)로 진입합니다.
+3. 목록 화면에서 검색/정렬/페이지를 조정하면 URL 쿼리스트링과 상태가 동기화됩니다.
+4. 사용자 권한/상태, 게시글/댓글 숨김/복구 액션은 확인 모달을 통해 실행됩니다.
+5. 처리 성공 시 토스트가 표시되고, `users/posts/comments/dashboard-summary` 관련 캐시가 재조회됩니다.
 
 ## 커밋 컨벤션
 
