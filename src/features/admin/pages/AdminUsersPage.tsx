@@ -37,6 +37,26 @@ const PAGE_SIZE_OPTIONS = [
   { value: 50, label: "50개" },
 ];
 
+function getRoleLabel(role: UserRole) {
+  return role === "ADMIN" ? "관리자" : "일반";
+}
+
+function getRoleBadgeClass(role: UserRole) {
+  return role === "ADMIN"
+    ? "bg-blue-600 text-white hover:bg-blue-600"
+    : "bg-slate-700 text-white hover:bg-slate-700 dark:bg-slate-200 dark:text-slate-900";
+}
+
+function getStatusLabel(status: UserStatus) {
+  return status === "ACTIVE" ? "활성" : "정지";
+}
+
+function getStatusBadgeClass(status: UserStatus) {
+  return status === "ACTIVE"
+    ? "bg-emerald-600 text-white hover:bg-emerald-600"
+    : "bg-rose-600 text-white hover:bg-rose-600";
+}
+
 export default function AdminUsersPage() {
   const { success, error, warn } = useToast();
   const listParams = useAdminListParams({ defaultSize: 20 });
@@ -155,7 +175,7 @@ export default function AdminUsersPage() {
       title="사용자 관리"
       description="체크박스로 여러 사용자를 선택해 권한/상태를 일괄 변경할 수 있습니다."
     >
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+      <section className="space-y-4 rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))] p-4 shadow-[0_26px_80px_-56px_rgba(15,23,42,0.45)] ring-1 ring-white/70 dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.96))] dark:ring-slate-800/70">
         <div className="grid items-end gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_170px]">
           <form
             className="flex min-w-0 gap-2 sm:col-span-2 lg:col-span-1"
@@ -182,10 +202,15 @@ export default function AdminUsersPage() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700/70 dark:bg-slate-800/40">
-          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-            선택됨 {selectedUserIds.length}개
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-3 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/70">
+          <div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              선택됨 {selectedUserIds.length}개
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              총 {(usersQuery.data?.totalElements ?? rows.length).toLocaleString()}명 중 현재 페이지 {rows.length}명
+            </p>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -330,7 +355,7 @@ export default function AdminUsersPage() {
         </div>
 
         <div className="hidden md:block">
-          <Table>
+          <Table className="min-w-[940px]">
             <TableHead>
               <TableRow>
                 <TableHeader className="w-12">
@@ -408,12 +433,51 @@ export default function AdminUsersPage() {
                           aria-label={`${user.username} 사용자 선택`}
                         />
                       </TableCell>
-                      <TableCell>{user.id}</TableCell>
-                      <TableCell className="font-semibold">{user.username}</TableCell>
-                      <TableCell>{user.name}</TableCell>
-                      <TableCell>{user.role}</TableCell>
-                      <TableCell>{user.status}</TableCell>
-                      <TableCell>{formatDateTime(user.createdAt)}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 font-mono text-xs font-semibold tabular-nums text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          #{user.id}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-950 dark:text-slate-50">
+                            {user.username}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            계정 핸들
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900 dark:text-slate-100">
+                            {user.name}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            프로필 표시 이름
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getRoleBadgeClass(user.role)}>
+                          {getRoleLabel(user.role)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getStatusBadgeClass(user.status)}>
+                          {getStatusLabel(user.status)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900 dark:text-slate-100">
+                            {formatDateTime(user.createdAt)}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            최근 생성 기준
+                          </p>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   );
                 })}

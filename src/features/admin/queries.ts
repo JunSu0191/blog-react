@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UserRole, UserStatus } from "@/shared/context/auth.types";
 import type { ApiError } from "@/shared/lib/api";
 import {
+  createAdminCategory,
+  deleteAdminCategory,
+  getAdminCategories,
   getAdminComments,
   getAdminDashboardSummary,
   getAdminPosts,
@@ -10,10 +13,12 @@ import {
   hideAdminPost,
   restoreAdminComment,
   restoreAdminPost,
+  updateAdminCategory,
   updateAdminUserRole,
   updateAdminUserStatus,
 } from "./api";
 import type {
+  AdminCategoryUpsertRequest,
   AdminListParams,
   AdminListParamsWithDeleted,
 } from "./types";
@@ -28,12 +33,20 @@ export const adminQueryKeys = {
     ["comments", params] as const,
   recentPosts: ["posts", "recent"] as const,
   recentComments: ["comments", "recent"] as const,
+  categories: ["admin", "categories"] as const,
 };
 
 export function useAdminDashboardSummary() {
   return useQuery({
     queryKey: adminQueryKeys.dashboardSummary,
     queryFn: getAdminDashboardSummary,
+  });
+}
+
+export function useAdminCategories() {
+  return useQuery({
+    queryKey: adminQueryKeys.categories,
+    queryFn: getAdminCategories,
   });
 }
 
@@ -307,6 +320,47 @@ export function useBulkUpdateAdminUserStatus() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+    },
+  });
+}
+
+export function useCreateAdminCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, ApiError, AdminCategoryUpsertRequest>({
+    mutationFn: (request) => createAdminCategory(request),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: adminQueryKeys.categories });
+      await queryClient.invalidateQueries({ queryKey: ["posts", "categories"] });
+    },
+  });
+}
+
+export function useUpdateAdminCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    void,
+    ApiError,
+    { categoryId: number; request: AdminCategoryUpsertRequest }
+  >({
+    mutationFn: ({ categoryId, request }) =>
+      updateAdminCategory(categoryId, request),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: adminQueryKeys.categories });
+      await queryClient.invalidateQueries({ queryKey: ["posts", "categories"] });
+    },
+  });
+}
+
+export function useDeleteAdminCategory() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, ApiError, { categoryId: number }>({
+    mutationFn: ({ categoryId }) => deleteAdminCategory(categoryId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: adminQueryKeys.categories });
+      await queryClient.invalidateQueries({ queryKey: ["posts", "categories"] });
     },
   });
 }

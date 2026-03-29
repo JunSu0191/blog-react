@@ -65,3 +65,17 @@ export type AdminCommentRow = {
   createdAt?: string;
   deletedAt?: string | null;
 };
+
+export type AdminCategoryRow = {
+  id: number;
+  name: string;
+  slug?: string;
+  postCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type AdminCategoryUpsertRequest = {
+  name: string;
+  slug?: string;
+};

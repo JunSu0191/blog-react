@@ -1,6 +1,8 @@
 import { API_BASE_URL, api } from "@/shared/lib/api";
 import type { UserRole, UserStatus } from "@/shared/context/auth.types";
 import type {
+  AdminCategoryRow,
+  AdminCategoryUpsertRequest,
   AdminCommentRow,
   AdminDashboardSummary,
   AdminDeletedFilter,
@@ -11,7 +13,22 @@ import type {
   AdminUserRow,
 } from "./types";
 
+function trimTrailingSlashes(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function ensureApiRoot(baseUrl: string) {
+  const trimmed = trimTrailingSlashes(baseUrl.trim());
+  if (/\/api$/i.test(trimmed)) return trimmed;
+  return `${trimmed}/api`;
+}
+
+const API_ROOT = ensureApiRoot(API_BASE_URL);
 const ADMIN_BASE = `${API_BASE_URL}/admin`;
+const ADMIN_CATEGORY_ENDPOINTS = [
+  `${API_ROOT}/categories`,
+  `${ADMIN_BASE}/categories`,
+] as const;
 const DEFAULT_PAGE_SIZE = 20;
 
 function toObject(value: unknown): Record<string, unknown> | null {
@@ -67,6 +84,73 @@ function resolveDeletedAt(obj: Record<string, unknown>): string | null {
     toText(obj.archived_at) ||
     (toText(obj.deletedYn)?.toUpperCase() === "Y" ? "__hidden__" : null)
   );
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  const obj = toObject(error);
+  if (!obj) return undefined;
+  return toFiniteNumber(obj.status);
+}
+
+function normalizeAdminCategory(raw: unknown): AdminCategoryRow | null {
+  const obj = toObject(raw);
+  if (!obj) return null;
+
+  const id = toFiniteNumber(obj.id) ?? toFiniteNumber(obj.categoryId);
+  if (typeof id !== "number") return null;
+
+  const name = toText(obj.name) || toText(obj.label);
+  if (!name) return null;
+
+  return {
+    id,
+    name,
+    slug: toText(obj.slug),
+    postCount: toFiniteNumber(obj.postCount) ?? toFiniteNumber(obj.postsCount),
+    createdAt: toText(obj.createdAt) || toText(obj.created_at),
+    updatedAt: toText(obj.updatedAt) || toText(obj.updated_at),
+  };
+}
+
+function normalizeAdminCategoryList(raw: unknown): AdminCategoryRow[] {
+  const obj = toObject(raw);
+  const rawContent =
+    (obj && Array.isArray(obj.content) && obj.content) ||
+    (obj && Array.isArray(obj.items) && obj.items) ||
+    (Array.isArray(raw) ? raw : []);
+
+  return rawContent
+    .map((item) => normalizeAdminCategory(item))
+    .filter((item): item is AdminCategoryRow => item !== null);
+}
+
+async function requestCategoryMutation<T>(
+  pathSuffix: string,
+  method: "POST" | "PUT" | "DELETE",
+  data?: unknown,
+): Promise<T> {
+  let lastError: unknown = null;
+
+  for (const endpoint of ADMIN_CATEGORY_ENDPOINTS) {
+    const url = `${endpoint}${pathSuffix}`;
+    try {
+      return await api<T>(url, {
+        method,
+        data,
+        suppressForbiddenRedirect: true,
+      });
+    } catch (error) {
+      const status = getErrorStatus(error);
+      if (status === 404 || status === 405) {
+        lastError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastError) throw lastError;
+  throw new Error("카테고리 요청에 실패했습니다.");
 }
 
 function normalizeAdminUser(raw: unknown): AdminUserRow | null {
@@ -216,6 +300,40 @@ function normalizeSummary(raw: unknown): AdminDashboardSummary {
 export async function getAdminDashboardSummary(): Promise<AdminDashboardSummary> {
   const data = await api<unknown>(`${ADMIN_BASE}/dashboard/summary`);
   return normalizeSummary(data);
+}
+
+export async function getAdminCategories(): Promise<AdminCategoryRow[]> {
+  for (const endpoint of ADMIN_CATEGORY_ENDPOINTS) {
+    try {
+      const data = await api<unknown>(endpoint, {
+        suppressForbiddenRedirect: true,
+      });
+      return normalizeAdminCategoryList(data);
+    } catch (error) {
+      const status = getErrorStatus(error);
+      if (status === 404) continue;
+      throw error;
+    }
+  }
+
+  return [];
+}
+
+export async function createAdminCategory(
+  request: AdminCategoryUpsertRequest,
+): Promise<void> {
+  await requestCategoryMutation<void>("", "POST", request);
+}
+
+export async function updateAdminCategory(
+  categoryId: number,
+  request: AdminCategoryUpsertRequest,
+): Promise<void> {
+  await requestCategoryMutation<void>(`/${categoryId}`, "PUT", request);
+}
+
+export async function deleteAdminCategory(categoryId: number): Promise<void> {
+  await requestCategoryMutation<void>(`/${categoryId}`, "DELETE");
 }
 
 export async function getAdminUsers(

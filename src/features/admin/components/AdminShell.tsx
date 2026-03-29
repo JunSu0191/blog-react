@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import {
   FileText,
+  FolderTree,
   LayoutDashboard,
   MessageSquare,
+  Sparkles,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -36,6 +38,18 @@ const adminNavItems = [
     icon: FileText,
   },
   {
+    label: "추천/검수",
+    path: "/admin/curation",
+    description: "큐레이션 운영",
+    icon: Sparkles,
+  },
+  {
+    label: "카테고리",
+    path: "/admin/categories",
+    description: "분류 체계 관리",
+    icon: FolderTree,
+  },
+  {
     label: "댓글",
     path: "/admin/comments",
     description: "커뮤니티 관리",
@@ -60,7 +74,7 @@ export default function AdminShell({
     <div className="route-enter">
       <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="lg:sticky lg:top-20 lg:self-start">
-          <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <section className="overflow-hidden rounded-[32px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.98))] shadow-[0_24px_70px_-48px_rgba(15,23,42,0.5)] ring-1 ring-white/70 dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.96))] dark:ring-slate-800/70">
             <div className="border-b border-slate-200/80 px-4 py-4 dark:border-slate-700/80">
               <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                 <ShieldCheck className="h-3.5 w-3.5" />
@@ -83,17 +97,17 @@ export default function AdminShell({
                     key={item.path}
                     to={item.path}
                     className={cn(
-                      "group flex min-w-0 items-center gap-3 rounded-2xl border px-3 py-2.5 transition",
+                      "group flex min-w-0 items-center gap-3 rounded-2xl border px-3 py-2.5 transition duration-200",
                       active
-                        ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/35 dark:text-blue-200"
-                        : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+                        ? "border-blue-200/80 bg-[linear-gradient(135deg,rgba(239,246,255,0.96),rgba(219,234,254,0.72))] text-blue-700 shadow-[0_14px_32px_-22px_rgba(37,99,235,0.55)] dark:border-blue-900/60 dark:bg-[linear-gradient(135deg,rgba(30,41,59,0.98),rgba(23,37,84,0.8))] dark:text-blue-200"
+                        : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800/80 dark:hover:text-slate-100",
                     )}
                   >
                     <span
                       className={cn(
-                        "inline-flex h-9 w-9 items-center justify-center rounded-xl border transition",
+                        "inline-flex h-9 w-9 items-center justify-center rounded-xl border transition duration-200",
                         active
-                          ? "border-blue-200 bg-white text-blue-600 dark:border-blue-900/60 dark:bg-blue-950/60 dark:text-blue-300"
+                          ? "border-blue-200 bg-white/90 text-blue-600 shadow-inner dark:border-blue-900/60 dark:bg-slate-950/70 dark:text-blue-300"
                           : "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
                       )}
                     >
@@ -113,8 +127,8 @@ export default function AdminShell({
         </aside>
 
         <main className="min-w-0 space-y-4">
-          <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div className="border-b border-slate-200/80 px-4 py-4 dark:border-slate-700/80 sm:px-6">
+          <section className="overflow-hidden rounded-[32px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(239,246,255,0.75))] shadow-[0_28px_80px_-56px_rgba(15,23,42,0.55)] ring-1 ring-white/70 dark:border-slate-800/80 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(15,23,42,0.82))] dark:ring-slate-800/70">
+            <div className="border-b border-slate-200/80 px-4 py-5 dark:border-slate-700/80 sm:px-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">

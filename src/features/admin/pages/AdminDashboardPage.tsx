@@ -47,26 +47,36 @@ export default function AdminDashboardPage() {
                 label="총 사용자"
                 value={summaryData.totalUsers}
                 tone="info"
+                hint="권한/상태 관리 대상"
+                className="rounded-[28px] shadow-[0_20px_60px_-42px_rgba(14,165,233,0.45)]"
               />
               <StatCard
                 label="총 게시글"
                 value={summaryData.totalPosts}
                 tone="default"
+                hint="운영 중인 콘텐츠"
+                className="rounded-[28px] shadow-[0_20px_60px_-42px_rgba(37,99,235,0.4)]"
               />
               <StatCard
                 label="총 댓글"
                 value={summaryData.totalComments}
                 tone="success"
+                hint="커뮤니티 반응량"
+                className="rounded-[28px] shadow-[0_20px_60px_-42px_rgba(16,185,129,0.38)]"
               />
               <StatCard
                 label="총 대화방"
                 value={summaryData.totalConversations}
                 tone="warning"
+                hint="실시간 대화 채널"
+                className="rounded-[28px] shadow-[0_20px_60px_-42px_rgba(245,158,11,0.38)]"
               />
               <StatCard
                 label="총 알림"
                 value={summaryData.totalNotifications}
                 tone="info"
+                hint="발송된 시스템 이벤트"
+                className="rounded-[28px] shadow-[0_20px_60px_-42px_rgba(14,165,233,0.45)]"
               />
             </section>
             <AdminDashboardCharts summary={summaryData} />
