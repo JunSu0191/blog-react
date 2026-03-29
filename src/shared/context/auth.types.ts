@@ -17,6 +17,7 @@ export type AuthContextValue = {
   user: User | null;
   isLoadingUser: boolean;
   login: (username: string, password: string) => Promise<AuthResponse>;
+  loginWithToken: (token: string) => Promise<User>;
   register: (
     username: string,
     name: string,

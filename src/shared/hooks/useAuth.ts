@@ -4,6 +4,7 @@ import * as userApi from "../../features/user/api";
 import {
   clearAuthStorage,
   getToken,
+  setToken,
   setUserId,
 } from "../lib/auth";
 import type { User } from "../context/auth.types";
@@ -16,13 +17,6 @@ export function useAuth() {
   const [isLoadingUser, setIsLoadingUser] = useState(false);
 
   useEffect(() => {
-    if (!token) {
-      setUser(null);
-      setIsLoadingUser(false);
-      queryClient.removeQueries({ queryKey: userApi.AUTH_ME_QUERY_KEY });
-      return;
-    }
-
     let cancelled = false;
     setIsLoadingUser(true);
 
@@ -30,13 +24,27 @@ export function useAuth() {
       try {
         const me = await userApi.getMe();
         if (cancelled) return;
-        setUser(me);
-        setUserId(me.id);
-        queryClient.setQueryData(userApi.AUTH_ME_QUERY_KEY, me);
-      } catch (error) {
-        if (cancelled) return;
-        console.warn("내 정보 동기화 실패:", error);
+        if (me) {
+          setUser(me);
+          setUserId(me.id);
+          queryClient.setQueryData(userApi.AUTH_ME_QUERY_KEY, me);
+          return;
+        }
+
         setUser(null);
+        queryClient.setQueryData(userApi.AUTH_ME_QUERY_KEY, null);
+        if (token) {
+          clearAuthStorage();
+          setTokenState(null);
+        }
+      } catch {
+        if (cancelled) return;
+        setUser(null);
+        queryClient.removeQueries({ queryKey: userApi.AUTH_ME_QUERY_KEY });
+        if (token) {
+          clearAuthStorage();
+          setTokenState(null);
+        }
       } finally {
         if (cancelled) return;
         setIsLoadingUser(false);
@@ -63,6 +71,43 @@ export function useAuth() {
     }
     return res;
   }, [queryClient]);
+
+  const loginWithToken = useCallback(
+    async (rawToken: string) => {
+      const normalizedToken = rawToken.replace(/^Bearer\s+/i, "").trim();
+      if (!normalizedToken) {
+        throw new Error("유효한 인증 토큰이 없습니다.");
+      }
+
+      disconnect();
+      clearAuthStorage();
+      setToken(normalizedToken);
+      setTokenState(normalizedToken);
+      setUser(null);
+      queryClient.removeQueries({ queryKey: userApi.AUTH_ME_QUERY_KEY });
+      setIsLoadingUser(true);
+
+      try {
+        const me = await userApi.getMe();
+        if (!me) {
+          throw new Error("로그인 사용자 정보를 확인할 수 없습니다.");
+        }
+        setUser(me);
+        setUserId(me.id);
+        queryClient.setQueryData(userApi.AUTH_ME_QUERY_KEY, me);
+        return me;
+      } catch (error) {
+        clearAuthStorage();
+        setTokenState(null);
+        setUser(null);
+        queryClient.removeQueries({ queryKey: userApi.AUTH_ME_QUERY_KEY });
+        throw error;
+      } finally {
+        setIsLoadingUser(false);
+      }
+    },
+    [queryClient],
+  );
 
   const register = useCallback(
     async (username: string, name: string, password: string) => {
@@ -91,5 +136,13 @@ export function useAuth() {
     queryClient.removeQueries({ queryKey: userApi.AUTH_ME_QUERY_KEY });
   }, [queryClient]);
 
-  return { token, user, isLoadingUser, login, register, logout };
+  return {
+    token,
+    user,
+    isLoadingUser,
+    login,
+    loginWithToken,
+    register,
+    logout,
+  };
 }

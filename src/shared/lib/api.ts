@@ -33,6 +33,22 @@ export type ApiError = {
   data?: unknown;
 };
 
+export function isUnauthorizedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const status = (error as { status?: unknown }).status;
+  return status === 401 || status === "401" || status === "UNAUTHORIZED";
+}
+
+export type ApiRequestConfig = AxiosRequestConfig & {
+  suppressForbiddenRedirect?: boolean;
+};
+
+export type ApiResponseMeta<T = unknown> = {
+  data: T;
+  status: number;
+  headers: Record<string, string>;
+};
+
 type TokenRefreshResponse = {
   token: string;
   refreshToken?: string;
@@ -70,13 +86,47 @@ function redirectTo(path: string) {
   window.location.replace(path);
 }
 
-function handleUnauthorizedRedirect() {
-  clearAuthStorage();
-  redirectTo("/login");
-}
-
 function handleForbiddenRedirect() {
   redirectTo("/403");
+}
+
+function clearAuthOnUnauthorized() {
+  clearAuthStorage();
+}
+
+function normalizeHeaders(headers: unknown): Record<string, string> {
+  if (!headers || typeof headers !== "object") return {};
+
+  if (headers instanceof AxiosHeaders) {
+    const normalized = headers.toJSON();
+    return Object.entries(normalized).reduce<Record<string, string>>(
+      (accumulator, [key, value]) => {
+        if (typeof value === "string") {
+          accumulator[key.toLowerCase()] = value;
+        } else if (Array.isArray(value)) {
+          accumulator[key.toLowerCase()] = value.join(", ");
+        } else if (typeof value === "number") {
+          accumulator[key.toLowerCase()] = String(value);
+        }
+        return accumulator;
+      },
+      {},
+    );
+  }
+
+  return Object.entries(headers as Record<string, unknown>).reduce<Record<string, string>>(
+    (accumulator, [key, value]) => {
+      if (typeof value === "string") {
+        accumulator[key.toLowerCase()] = value;
+      } else if (Array.isArray(value)) {
+        accumulator[key.toLowerCase()] = value.join(", ");
+      } else if (typeof value === "number") {
+        accumulator[key.toLowerCase()] = String(value);
+      }
+      return accumulator;
+    },
+    {},
+  );
 }
 
 apiClient.interceptors.request.use((config) => {
@@ -137,11 +187,13 @@ async function refreshAccessToken(): Promise<string | null> {
 
 async function requestApi<T = unknown>(
   input: string,
-  init?: AxiosRequestConfig,
+  init?: ApiRequestConfig,
   retried = false,
-): Promise<T> {
+): Promise<ApiResponseMeta<T>> {
   const bypassRefresh = shouldBypassRefresh(input);
-  const authEndpoint = isAuthEndpoint(input);
+  const suppressForbiddenRedirect = Boolean(init?.suppressForbiddenRedirect);
+  const requestConfig = { ...(init ?? {}) } as ApiRequestConfig;
+  delete requestConfig.suppressForbiddenRedirect;
   try {
     let token = getToken();
     if (!bypassRefresh && token && isTokenExpired(token)) {
@@ -150,20 +202,23 @@ async function requestApi<T = unknown>(
         clearAuthStorage();
       }
     }
-    if (!bypassRefresh && authEndpoint && !token) {
-      throw { status: 401, message: "인증이 필요합니다." } as ApiError;
-    }
 
     const res = await apiClient.request<unknown>({
-      ...init,
+      ...requestConfig,
       url: input,
       headers: {
-        ...((init?.headers as Record<string, string> | undefined) ?? {}),
+        ...((requestConfig.headers as Record<string, string> | undefined) ?? {}),
       },
     });
 
+    const headers = normalizeHeaders(res.headers);
+
     if (res.status === 204 || typeof res.data === "undefined" || res.data === null) {
-      return undefined as T;
+      return {
+        data: undefined as T,
+        status: res.status,
+        headers,
+      };
     }
 
     // 백엔드 응답 래퍼 형식(success/data) 지원
@@ -180,11 +235,19 @@ async function requestApi<T = unknown>(
         throw { status: apiRes.status, message, data: apiRes.data } as ApiError;
       }
 
-      return apiRes.data as T;
+      return {
+        data: apiRes.data as T,
+        status: res.status,
+        headers,
+      };
     }
 
     // 일부 엔드포인트는 래퍼 없이 원시 데이터를 반환한다.
-    return res.data as T;
+    return {
+      data: res.data as T,
+      status: res.status,
+      headers,
+    };
   } catch (err) {
     if (err && typeof err === "object" && "status" in err && "message" in err) {
       // 인증 에러 처리 (상태코드가 UNAUTHORIZED 문자열일 수도 있음)
@@ -197,9 +260,15 @@ async function requestApi<T = unknown>(
           const refreshed = await refreshAccessToken();
           if (refreshed) return requestApi<T>(input, init, true);
         }
-        handleUnauthorizedRedirect();
+        if (!bypassRefresh) {
+          clearAuthOnUnauthorized();
+        }
       }
-      if (status === 403 && !bypassRefresh) {
+      if (
+        status === 403 &&
+        !bypassRefresh &&
+        !suppressForbiddenRedirect
+      ) {
         handleForbiddenRedirect();
       }
       throw err;
@@ -229,11 +298,15 @@ async function requestApi<T = unknown>(
           if (refreshed) return requestApi<T>(input, init, true);
         }
         if (!bypassRefresh) {
-          handleUnauthorizedRedirect();
+          clearAuthOnUnauthorized();
         }
       }
 
-      if (status === 403 && !bypassRefresh) {
+      if (
+        status === 403 &&
+        !bypassRefresh &&
+        !suppressForbiddenRedirect
+      ) {
         handleForbiddenRedirect();
       }
 
@@ -247,7 +320,15 @@ async function requestApi<T = unknown>(
 
 export async function api<T = unknown>(
   input: string,
-  init?: AxiosRequestConfig
+  init?: ApiRequestConfig
 ): Promise<T> {
+  const response = await requestApi<T>(input, init, false);
+  return response.data;
+}
+
+export async function apiWithMeta<T = unknown>(
+  input: string,
+  init?: ApiRequestConfig
+): Promise<ApiResponseMeta<T>> {
   return requestApi<T>(input, init, false);
 }

@@ -165,10 +165,13 @@ export async function register(req: RegisterRequest): Promise<AuthResponse> {
   return data;
 }
 
-export async function getMe(): Promise<AuthUser> {
+export async function getMe(): Promise<AuthUser | null> {
   const raw = await api<unknown>(`${BASE}/auth/me`, {
     method: "GET",
   });
+  if (raw === null || typeof raw === "undefined") {
+    return null;
+  }
   const data = normalizeAuthUser(raw);
   if (!data) {
     throw new Error("내 정보 조회 응답 형식이 올바르지 않습니다.");
