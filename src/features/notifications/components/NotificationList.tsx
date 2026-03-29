@@ -11,6 +11,7 @@ import { toNotificationContent } from "../api";
 
 export type NotificationListProps = {
   compact?: boolean;
+  filter?: "all" | "comment" | "chat" | "unread";
 };
 
 const NOTIFICATION_BATCH_SIZE = 30;
@@ -25,7 +26,10 @@ function formatDateTime(raw?: string) {
   });
 }
 
-export default function NotificationList({ compact = false }: NotificationListProps) {
+export default function NotificationList({
+  compact = false,
+  filter = "all",
+}: NotificationListProps) {
   const navigate = useNavigate();
   const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useNotifications();
@@ -45,20 +49,32 @@ export default function NotificationList({ compact = false }: NotificationListPr
     return Array.from(byId.values()).sort((a, b) => b.id - a.id);
   }, [data?.pages]);
 
+  const filteredNotifications = useMemo(() => {
+    if (filter === "all") return notifications;
+    if (filter === "unread") return notifications.filter((item) => !item.isRead);
+    if (filter === "comment") {
+      return notifications.filter((item) => item.type === "POST_COMMENT");
+    }
+    if (filter === "chat") {
+      return notifications.filter((item) => item.type === "CHAT_MESSAGE");
+    }
+    return notifications;
+  }, [filter, notifications]);
+
   useEffect(() => {
     setVisibleCount((prev) =>
       Math.min(
         Math.max(NOTIFICATION_BATCH_SIZE, prev),
-        Math.max(NOTIFICATION_BATCH_SIZE, notifications.length),
+        Math.max(NOTIFICATION_BATCH_SIZE, filteredNotifications.length),
       ),
     );
-  }, [notifications.length]);
+  }, [filteredNotifications.length]);
 
   const visibleNotifications = useMemo(
-    () => notifications.slice(0, visibleCount),
-    [notifications, visibleCount],
+    () => filteredNotifications.slice(0, visibleCount),
+    [filteredNotifications, visibleCount],
   );
-  const hasMoreVisibleItems = visibleCount < notifications.length;
+  const hasMoreVisibleItems = visibleCount < filteredNotifications.length;
 
   const loadedUnreadCount = useMemo(
     () => notifications.filter((item) => !item.isRead).length,
@@ -86,7 +102,7 @@ export default function NotificationList({ compact = false }: NotificationListPr
         if (!entry?.isIntersecting) return;
         if (hasMoreVisibleItems) {
           setVisibleCount((prev) =>
-            Math.min(prev + NOTIFICATION_BATCH_SIZE, notifications.length),
+            Math.min(prev + NOTIFICATION_BATCH_SIZE, filteredNotifications.length),
           );
           return;
         }
@@ -108,7 +124,7 @@ export default function NotificationList({ compact = false }: NotificationListPr
     hasMoreVisibleItems,
     hasNextPage,
     isFetchingNextPage,
-    notifications.length,
+    filteredNotifications.length,
   ]);
 
   const moveToLink = (linkUrl?: string) => {
@@ -153,9 +169,9 @@ export default function NotificationList({ compact = false }: NotificationListPr
           </p>
         )}
 
-        {!isLoading && !error && notifications.length === 0 && (
+        {!isLoading && !error && filteredNotifications.length === 0 && (
           <p className="rounded-xl border border-dashed border-slate-300 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-            새 알림이 없습니다.
+            표시할 알림이 없습니다.
           </p>
         )}
 
