@@ -1,6 +1,10 @@
 export * from "./api";
 export * from "./queries";
 export * from "./conversationDisplay";
+export * from "./chat.enums";
+export * from "./types";
+export * from "./chatPolicies";
+export * from "./store/chatUiStore";
 export { default as ConversationList } from "./components/ConversationList";
 export { default as ChatRoom } from "./components/ChatRoom";
 export { default as ChatUnreadRealtimeBridge } from "./components/ChatUnreadRealtimeBridge";

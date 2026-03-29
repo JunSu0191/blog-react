@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui";
+import { CHAT_THREAD_TYPE } from "../chat.enums";
 import type { ChatConversation } from "../api";
 import {
   matchesConversationSearch,
@@ -19,10 +20,15 @@ type ConversationListProps = {
   conversations: ChatConversation[];
   selectedConversationId?: number;
   onSelect: (conversationId: number) => void;
-  onRequestLeaveConversation?: (conversationId: number) => void;
-  leavingConversationId?: number;
+  onRequestLeaveGroup?: (threadId: number) => void;
+  onRequestHideThread?: (threadId: number) => void;
+  onRequestClearMyMessages?: (threadId: number) => void;
+  leavingGroupThreadId?: number;
+  hidingThreadId?: number;
+  clearingThreadId?: number;
   isLoading?: boolean;
   searchKeyword?: string;
+  resurfacedThreadIds?: Set<number>;
 };
 
 function formatTime(raw?: string) {
@@ -52,14 +58,33 @@ function formatUnreadCount(raw?: number): string {
   return count > 99 ? "99+" : String(count);
 }
 
+function isDirectConversation(conversation: ChatConversation) {
+  return (
+    typeof conversation.type === "string" &&
+    conversation.type.toUpperCase() === CHAT_THREAD_TYPE.DIRECT
+  );
+}
+
+function isGroupConversation(conversation: ChatConversation) {
+  return (
+    typeof conversation.type === "string" &&
+    conversation.type.toUpperCase() === CHAT_THREAD_TYPE.GROUP
+  );
+}
+
 export default function ConversationList({
   conversations,
   selectedConversationId,
   onSelect,
-  onRequestLeaveConversation,
-  leavingConversationId,
+  onRequestLeaveGroup,
+  onRequestHideThread,
+  onRequestClearMyMessages,
+  leavingGroupThreadId,
+  hidingThreadId,
+  clearingThreadId,
   isLoading,
   searchKeyword = "",
+  resurfacedThreadIds,
 }: ConversationListProps) {
   const filteredConversations = conversations.filter((conversation) =>
     matchesConversationSearch(conversation, searchKeyword),
@@ -85,13 +110,21 @@ export default function ConversationList({
     <div className="divide-y divide-slate-100 bg-white dark:divide-slate-800 dark:bg-slate-900">
       {filteredConversations.map((conversation) => {
         const isActive = conversation.id === selectedConversationId;
-        const isLeaving = leavingConversationId === conversation.id;
-        const isAnyLeavePending = typeof leavingConversationId === "number";
+        const isLeavingGroup = leavingGroupThreadId === conversation.id;
+        const isHiding = hidingThreadId === conversation.id;
+        const isClearing = clearingThreadId === conversation.id;
+        const hasPendingAction =
+          typeof leavingGroupThreadId === "number" ||
+          typeof hidingThreadId === "number" ||
+          typeof clearingThreadId === "number";
 
         const displayMeta = resolveConversationDisplayMeta(conversation);
         const unreadCountText = formatUnreadCount(
           conversation.unreadMessageCount ?? conversation.unreadCount,
         );
+        const canClearMyMessages = isDirectConversation(conversation);
+        const canLeaveGroup = isGroupConversation(conversation);
+        const isResurfaced = Boolean(resurfacedThreadIds?.has(conversation.id));
 
         return (
           <ContextMenu key={conversation.id}>
@@ -124,6 +157,11 @@ export default function ConversationList({
                               {displayMeta.participantCount}
                             </span>
                           )}
+                        {isResurfaced && (
+                          <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/45 dark:text-emerald-300">
+                            새 메시지
+                          </span>
+                        )}
                       </div>
                       <span className="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">
                         {formatTime(conversation.updatedAt)}
@@ -142,44 +180,88 @@ export default function ConversationList({
                   </div>
                 </button>
 
-                {onRequestLeaveConversation && (
+                {(onRequestLeaveGroup || onRequestHideThread || onRequestClearMyMessages) && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button
                         type="button"
                         className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-slate-500 transition hover:border-slate-200 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-slate-400 dark:hover:border-slate-700 dark:hover:bg-slate-900 dark:hover:text-slate-200"
                         aria-label="대화방 메뉴"
-                        disabled={isAnyLeavePending}
+                        disabled={hasPendingAction}
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" sideOffset={6} className="w-40">
-                      <DropdownMenuItem
-                        className="text-rose-600 focus:text-rose-600 dark:text-rose-400 dark:focus:text-rose-300"
-                        disabled={isAnyLeavePending}
-                        onSelect={(event) => {
-                          event.preventDefault();
-                          onRequestLeaveConversation(conversation.id);
-                        }}
-                      >
-                        {isLeaving ? "나가는 중..." : "대화방 나가기"}
-                      </DropdownMenuItem>
+                    <DropdownMenuContent align="end" sideOffset={6} className="w-48">
+                      {canLeaveGroup && onRequestLeaveGroup && (
+                        <DropdownMenuItem
+                          className="text-rose-600 focus:text-rose-600 dark:text-rose-400 dark:focus:text-rose-300"
+                          disabled={hasPendingAction}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            onRequestLeaveGroup(conversation.id);
+                          }}
+                        >
+                          {isLeavingGroup ? "나가는 중..." : "그룹 나가기"}
+                        </DropdownMenuItem>
+                      )}
+                      {onRequestHideThread && (
+                        <DropdownMenuItem
+                          disabled={hasPendingAction}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            onRequestHideThread(conversation.id);
+                          }}
+                        >
+                          {isHiding ? "숨기는 중..." : "대화 숨기기"}
+                        </DropdownMenuItem>
+                      )}
+                      {canClearMyMessages && onRequestClearMyMessages && (
+                        <DropdownMenuItem
+                          className="text-rose-600 focus:text-rose-600 dark:text-rose-400 dark:focus:text-rose-300"
+                          disabled={hasPendingAction}
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            onRequestClearMyMessages(conversation.id);
+                          }}
+                        >
+                          {isClearing ? "삭제 중..." : "내 메시지 기록 삭제"}
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
               </div>
             </ContextMenuTrigger>
 
-            {onRequestLeaveConversation && (
-              <ContextMenuContent className="w-40">
-                <ContextMenuItem
-                  className="text-rose-600 focus:text-rose-600 dark:text-rose-400 dark:focus:text-rose-300"
-                  disabled={isAnyLeavePending}
-                  onSelect={() => onRequestLeaveConversation(conversation.id)}
-                >
-                  {isLeaving ? "나가는 중..." : "대화방 나가기"}
-                </ContextMenuItem>
+            {(onRequestLeaveGroup || onRequestHideThread || onRequestClearMyMessages) && (
+              <ContextMenuContent className="w-48">
+                {canLeaveGroup && onRequestLeaveGroup && (
+                  <ContextMenuItem
+                    className="text-rose-600 focus:text-rose-600 dark:text-rose-400 dark:focus:text-rose-300"
+                    disabled={hasPendingAction}
+                    onSelect={() => onRequestLeaveGroup(conversation.id)}
+                  >
+                    {isLeavingGroup ? "나가는 중..." : "그룹 나가기"}
+                  </ContextMenuItem>
+                )}
+                {onRequestHideThread && (
+                  <ContextMenuItem
+                    disabled={hasPendingAction}
+                    onSelect={() => onRequestHideThread(conversation.id)}
+                  >
+                    {isHiding ? "숨기는 중..." : "대화 숨기기"}
+                  </ContextMenuItem>
+                )}
+                {canClearMyMessages && onRequestClearMyMessages && (
+                  <ContextMenuItem
+                    className="text-rose-600 focus:text-rose-600 dark:text-rose-400 dark:focus:text-rose-300"
+                    disabled={hasPendingAction}
+                    onSelect={() => onRequestClearMyMessages(conversation.id)}
+                  >
+                    {isClearing ? "삭제 중..." : "내 메시지 기록 삭제"}
+                  </ContextMenuItem>
+                )}
               </ContextMenuContent>
             )}
           </ContextMenu>

@@ -1,55 +1,42 @@
 import { API_BASE_URL, api } from "@/shared/lib/api";
+import {
+  CHAT_MEMBERSHIP_STATE,
+  CHAT_SOCKET_EVENT_RAW,
+  CHAT_SOCKET_EVENT_TYPE,
+  CHAT_THREAD_TYPE,
+  FRIEND_RELATION_STATUS,
+  GROUP_INVITE_STATUS,
+  type ChatMembershipState,
+  type ChatSocketEventType,
+  type ChatThreadType,
+  type FriendRequestDirection,
+  type GroupInviteStatus,
+} from "./chat.enums";
+import type {
+  ChatMessage,
+  ChatMessagesPage,
+  ChatThread,
+  ChatUserEvent,
+  ChatUserSummary,
+  ConversationUnreadCountEvent,
+  CreateConversationRequest,
+  CreateGroupInviteRequest,
+  Friend,
+  FriendRequest,
+  GroupInvite,
+} from "./types";
 
-export type ConversationSummary = {
-  id: number;
-  title?: string | null;
-  displayTitle: string;
-  type?: string;
-  lastMessage?: string;
-  unreadMessageCount: number;
-  // Backward compatibility for existing UI paths.
-  unreadCount?: number;
-  updatedAt?: string;
-  participantCount?: number;
-  participantUserIds?: number[];
-  participantNames?: string[];
-};
-
-export type ChatConversation = ConversationSummary;
-
-export interface ConversationUnreadCountEvent {
-  type: "CONVERSATION_UNREAD_COUNT_UPDATED";
-  conversationId: number;
-  unreadMessageCount: number;
-  totalUnreadMessageCount: number;
-}
-
-export type ChatUser = {
-  userId: number;
-  username?: string;
-  name?: string;
-};
-
-export type ChatMessage = {
-  id?: number;
-  conversationId: number;
-  senderId?: number;
-  senderName?: string;
-  content: string;
-  createdAt?: string;
-  clientMsgId?: string;
-};
-
-export type ChatMessagesPage = {
-  messages: ChatMessage[];
-  nextCursorMessageId?: number;
-  hasMore: boolean;
-};
-
-export type CreateConversationRequest = {
-  type: "GROUP";
-  title?: string;
-  participantUserIds: number[];
+export type ChatConversation = ChatThread;
+export type ChatUser = ChatUserSummary;
+export type {
+  ChatMessage,
+  ChatMessagesPage,
+  ChatThread,
+  CreateConversationRequest,
+  CreateGroupInviteRequest,
+  Friend,
+  FriendRequest,
+  GroupInvite,
 };
 
 const BASE = API_BASE_URL;
@@ -59,13 +46,20 @@ function withUserHeader(userId?: number) {
 }
 
 function toFiniteNumber(value: unknown): number | undefined {
-  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  const n =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : NaN;
   return Number.isFinite(n) ? n : undefined;
 }
 
 function toText(value: unknown): string {
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
   if (value && typeof value === "object") {
     const obj = value as Record<string, unknown>;
     if (typeof obj.text === "string") return obj.text;
@@ -76,40 +70,14 @@ function toText(value: unknown): string {
   return "";
 }
 
-function normalizeConversationLastMessage(obj: Record<string, unknown>): string {
-  const lastMessageObj =
-    (obj.lastMessage && typeof obj.lastMessage === "object"
-      ? (obj.lastMessage as Record<string, unknown>)
-      : undefined) ??
-    (obj.lastMessageDto && typeof obj.lastMessageDto === "object"
-      ? (obj.lastMessageDto as Record<string, unknown>)
-      : undefined);
-
-  const metadata =
-    lastMessageObj?.metadata && typeof lastMessageObj.metadata === "object"
-      ? (lastMessageObj.metadata as Record<string, unknown>)
-      : undefined;
-
-  return (
-    toText(obj.lastMessage) ||
-    toText(obj.lastMessageContent) ||
-    toText(obj.last_message) ||
-    toText(obj.last_message_content) ||
-    toText(lastMessageObj?.content) ||
-    toText(lastMessageObj?.body) ||
-    toText(lastMessageObj?.message) ||
-    toText(lastMessageObj?.text) ||
-    toText(metadata?.content) ||
-    toText(metadata?.body) ||
-    toText(metadata?.message) ||
-    toText(metadata?.text) ||
-    ""
-  );
+function trimText(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-
   return value
     .map((item) => toText(item).trim())
     .filter((item): item is string => item.length > 0);
@@ -117,10 +85,17 @@ function normalizeStringArray(value: unknown): string[] {
 
 function normalizeNumberArray(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
-
   return value
     .map((item) => toFiniteNumber(item))
     .filter((item): item is number => typeof item === "number");
+}
+
+function uniqueNumbers(values: number[]): number[] {
+  return Array.from(new Set(values));
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values));
 }
 
 function normalizeParticipantList(value: unknown): {
@@ -179,19 +154,132 @@ function normalizeParticipantList(value: unknown): {
   };
 }
 
-function uniqueNumbers(values: number[]): number[] {
-  return Array.from(new Set(values));
+function normalizeConversationLastMessage(obj: Record<string, unknown>): string {
+  const lastMessageObj =
+    (obj.lastMessage && typeof obj.lastMessage === "object"
+      ? (obj.lastMessage as Record<string, unknown>)
+      : undefined) ??
+    (obj.lastMessageDto && typeof obj.lastMessageDto === "object"
+      ? (obj.lastMessageDto as Record<string, unknown>)
+      : undefined);
+
+  const metadata =
+    lastMessageObj?.metadata && typeof lastMessageObj.metadata === "object"
+      ? (lastMessageObj.metadata as Record<string, unknown>)
+      : undefined;
+
+  return (
+    toText(obj.lastMessage) ||
+    toText(obj.lastMessageContent) ||
+    toText(obj.last_message) ||
+    toText(obj.last_message_content) ||
+    toText(lastMessageObj?.content) ||
+    toText(lastMessageObj?.body) ||
+    toText(lastMessageObj?.message) ||
+    toText(lastMessageObj?.text) ||
+    toText(metadata?.content) ||
+    toText(metadata?.body) ||
+    toText(metadata?.message) ||
+    toText(metadata?.text) ||
+    ""
+  );
 }
 
-function uniqueStrings(values: string[]): string[] {
-  return Array.from(new Set(values));
+function normalizeThreadType(value: unknown): ChatThreadType {
+  const raw = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return raw === CHAT_THREAD_TYPE.GROUP
+    ? CHAT_THREAD_TYPE.GROUP
+    : CHAT_THREAD_TYPE.DIRECT;
 }
 
-function normalizeConversation(raw: unknown): ChatConversation | null {
+function normalizeMembershipState(value: unknown): ChatMembershipState | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) return undefined;
+
+  if (normalized === CHAT_MEMBERSHIP_STATE.ACTIVE) {
+    return CHAT_MEMBERSHIP_STATE.ACTIVE;
+  }
+  if (normalized === CHAT_MEMBERSHIP_STATE.HIDDEN) {
+    return CHAT_MEMBERSHIP_STATE.HIDDEN;
+  }
+  if (normalized === CHAT_MEMBERSHIP_STATE.CLEARED) {
+    return CHAT_MEMBERSHIP_STATE.CLEARED;
+  }
+
+  return undefined;
+}
+
+function normalizeFriendStatus(value: unknown) {
+  if (typeof value !== "string") return FRIEND_RELATION_STATUS.ACCEPTED;
+  const normalized = value.trim().toUpperCase();
+
+  if (normalized === FRIEND_RELATION_STATUS.PENDING) {
+    return FRIEND_RELATION_STATUS.PENDING;
+  }
+  if (normalized === FRIEND_RELATION_STATUS.ACCEPTED) {
+    return FRIEND_RELATION_STATUS.ACCEPTED;
+  }
+  if (normalized === FRIEND_RELATION_STATUS.REJECTED) {
+    return FRIEND_RELATION_STATUS.REJECTED;
+  }
+  if (normalized === FRIEND_RELATION_STATUS.BLOCKED) {
+    return FRIEND_RELATION_STATUS.BLOCKED;
+  }
+  if (normalized === FRIEND_RELATION_STATUS.CANCELED) {
+    return FRIEND_RELATION_STATUS.CANCELED;
+  }
+
+  return FRIEND_RELATION_STATUS.ACCEPTED;
+}
+
+function normalizeInviteStatus(value: unknown): GroupInviteStatus {
+  if (typeof value !== "string") return GROUP_INVITE_STATUS.PENDING;
+  const normalized = value.trim().toUpperCase();
+
+  if (normalized === GROUP_INVITE_STATUS.ACCEPTED) {
+    return GROUP_INVITE_STATUS.ACCEPTED;
+  }
+  if (normalized === GROUP_INVITE_STATUS.REJECTED) {
+    return GROUP_INVITE_STATUS.REJECTED;
+  }
+
+  return GROUP_INVITE_STATUS.PENDING;
+}
+
+function normalizeUser(raw: unknown): ChatUserSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const nestedUser =
+    obj.user && typeof obj.user === "object"
+      ? (obj.user as Record<string, unknown>)
+      : undefined;
+
+  const userId =
+    toFiniteNumber(obj.userId) ??
+    toFiniteNumber(obj.friendUserId) ??
+    toFiniteNumber(obj.targetUserId) ??
+    toFiniteNumber(obj.id) ??
+    toFiniteNumber(nestedUser?.userId) ??
+    toFiniteNumber(nestedUser?.id);
+
+  if (typeof userId !== "number") return null;
+
+  return {
+    userId,
+    username:
+      trimText(toText(obj.username)) || trimText(toText(nestedUser?.username)),
+    name: trimText(toText(obj.name)) || trimText(toText(nestedUser?.name)),
+    nickname:
+      trimText(toText(obj.nickname)) || trimText(toText(nestedUser?.nickname)),
+  };
+}
+
+function normalizeThread(raw: unknown, fallbackType?: ChatThreadType): ChatThread | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
 
-  const rawId = obj.id ?? obj.conversationId;
+  const rawId = obj.id ?? obj.threadId ?? obj.conversationId;
   const id =
     typeof rawId === "number"
       ? rawId
@@ -229,12 +317,13 @@ function normalizeConversation(raw: unknown): ChatConversation | null {
     ...participantListFromUsers.participantNames,
   ]);
 
-  const type =
-    (typeof obj.type === "string" ? obj.type : undefined) ||
-    (typeof obj.conversationType === "string" ? obj.conversationType : undefined) ||
-    (typeof obj.roomType === "string" ? obj.roomType : undefined) ||
-    (typeof obj.chatType === "string" ? obj.chatType : undefined) ||
-    undefined;
+  const rawType =
+    obj.type ??
+    obj.threadType ??
+    obj.conversationType ??
+    obj.roomType ??
+    obj.chatType;
+  const type = fallbackType ?? normalizeThreadType(rawType);
 
   const participantCount =
     toFiniteNumber(obj.participantCount) ??
@@ -256,13 +345,29 @@ function normalizeConversation(raw: unknown): ChatConversation | null {
     0;
 
   const normalizedTitle = trimText(
-    toText(obj.title) ||
-      toText(obj.conversationName) ||
-      toText(obj.name),
+    toText(obj.title) || toText(obj.conversationName) || toText(obj.name),
   );
   const normalizedDisplayTitle = trimText(
     toText(obj.displayTitle) || toText(obj.display_title),
   );
+
+  const membershipState = normalizeMembershipState(
+    obj.membershipState ?? obj.membership_status,
+  );
+
+  const explicitHidden =
+    typeof obj.hidden === "boolean"
+      ? obj.hidden
+      : typeof obj.isHidden === "boolean"
+        ? obj.isHidden
+        : typeof obj.hiddenForMe === "boolean"
+          ? obj.hiddenForMe
+          : undefined;
+
+  const hidden =
+    typeof explicitHidden === "boolean"
+      ? explicitHidden
+      : membershipState === CHAT_MEMBERSHIP_STATE.HIDDEN;
 
   return {
     id,
@@ -281,33 +386,116 @@ function normalizeConversation(raw: unknown): ChatConversation | null {
     participantCount,
     participantUserIds: participantUserIds.length > 0 ? participantUserIds : undefined,
     participantNames: participantNames.length > 0 ? participantNames : undefined,
+    membershipState,
+    hidden,
+    groupId:
+      toFiniteNumber(obj.groupId) ??
+      toFiniteNumber(obj.roomId) ??
+      toFiniteNumber(obj.group_id) ??
+      (type === CHAT_THREAD_TYPE.GROUP ? id : undefined),
   };
 }
 
-function trimText(value?: string): string | undefined {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+function normalizeFriend(raw: unknown): Friend | null {
+  const user = normalizeUser(raw);
+  if (!user) return null;
+
+  const obj = raw as Record<string, unknown>;
+  return {
+    ...user,
+    status: normalizeFriendStatus(obj.status ?? obj.friendStatus),
+    createdAt:
+      (obj.createdAt as string | undefined) ||
+      (obj.requestedAt as string | undefined) ||
+      (obj.updatedAt as string | undefined),
+  };
 }
 
-function normalizeUser(raw: unknown): ChatUser | null {
+function normalizeFriendRequest(
+  raw: unknown,
+  direction: FriendRequestDirection,
+): FriendRequest | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const obj = raw as Record<string, unknown>;
+  const requestId =
+    toFiniteNumber(obj.requestId) ??
+    toFiniteNumber(obj.id) ??
+    toFiniteNumber(obj.friendRequestId);
+
+  if (typeof requestId !== "number") return null;
+
+  const requesterCandidate =
+    (obj.requester && typeof obj.requester === "object"
+      ? (obj.requester as Record<string, unknown>)
+      : undefined) ||
+    (obj.fromUser && typeof obj.fromUser === "object"
+      ? (obj.fromUser as Record<string, unknown>)
+      : undefined) ||
+    obj;
+
+  const targetCandidate =
+    (obj.target && typeof obj.target === "object"
+      ? (obj.target as Record<string, unknown>)
+      : undefined) ||
+    (obj.toUser && typeof obj.toUser === "object"
+      ? (obj.toUser as Record<string, unknown>)
+      : undefined) ||
+    obj;
+
+  const requester = normalizeUser(requesterCandidate);
+  const target = normalizeUser(targetCandidate);
+
+  if (!requester || !target) return null;
+
+  return {
+    requestId,
+    direction,
+    status: normalizeFriendStatus(obj.status ?? obj.requestStatus),
+    requester,
+    target,
+    createdAt: (obj.createdAt as string | undefined) || (obj.requestedAt as string | undefined),
+    updatedAt: (obj.updatedAt as string | undefined),
+  };
+}
+
+function normalizeGroupInvite(raw: unknown): GroupInvite | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
 
-  const rawUserId = obj.userId ?? obj.id;
-  const userId =
-    typeof rawUserId === "number"
-      ? rawUserId
-      : typeof rawUserId === "string"
-        ? Number(rawUserId)
-        : NaN;
+  const inviteId =
+    toFiniteNumber(obj.inviteId) ??
+    toFiniteNumber(obj.id) ??
+    toFiniteNumber(obj.groupInviteId);
 
-  if (!Number.isFinite(userId)) return null;
+  const groupId =
+    toFiniteNumber(obj.groupId) ??
+    toFiniteNumber(obj.roomId) ??
+    toFiniteNumber(obj.threadId);
+
+  if (typeof inviteId !== "number" || typeof groupId !== "number") return null;
+
+  const inviter =
+    normalizeUser(obj.inviter) ||
+    normalizeUser(obj.sender) ||
+    normalizeUser({
+      userId: toFiniteNumber(obj.inviterUserId) ?? toFiniteNumber(obj.senderId),
+      username: obj.inviterUsername ?? obj.senderUsername,
+      name: obj.inviterName ?? obj.senderName,
+    });
+
+  if (!inviter) return null;
 
   return {
-    userId,
-    username: typeof obj.username === "string" ? obj.username : undefined,
-    name: typeof obj.name === "string" ? obj.name : undefined,
+    inviteId,
+    groupId,
+    threadId: toFiniteNumber(obj.threadId),
+    groupName:
+      trimText(toText(obj.groupName)) || trimText(toText(obj.threadTitle)),
+    inviter,
+    status: normalizeInviteStatus(obj.status),
+    createdAt: (obj.createdAt as string | undefined),
+    updatedAt: (obj.updatedAt as string | undefined),
   };
 }
 
@@ -374,20 +562,286 @@ function normalizeMessage(conversationId: number, raw: unknown): ChatMessage | n
   };
 }
 
-export async function getConversations(userId?: number) {
-  const data = await api<unknown>(`${BASE}/chat/conversations`, {
+function normalizeEventType(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function mapEventType(rawType: string): ChatSocketEventType | undefined {
+  const normalized = rawType.trim().toLowerCase();
+
+  if (
+    normalized === CHAT_SOCKET_EVENT_RAW.CHAT_MESSAGE_CREATED ||
+    normalized === "message_created"
+  ) {
+    return CHAT_SOCKET_EVENT_TYPE.MESSAGE_CREATED;
+  }
+
+  if (
+    normalized === CHAT_SOCKET_EVENT_RAW.CHAT_THREAD_UPDATED ||
+    normalized === "thread_updated"
+  ) {
+    return CHAT_SOCKET_EVENT_TYPE.THREAD_UPDATED;
+  }
+
+  if (
+    normalized === CHAT_SOCKET_EVENT_RAW.FRIEND_REQUEST_CREATED ||
+    normalized === "friend_request_received"
+  ) {
+    return CHAT_SOCKET_EVENT_TYPE.FRIEND_REQUEST_RECEIVED;
+  }
+
+  if (
+    normalized === CHAT_SOCKET_EVENT_RAW.FRIEND_REQUEST_UPDATED ||
+    normalized === "friend_request_updated"
+  ) {
+    return CHAT_SOCKET_EVENT_TYPE.FRIEND_REQUEST_UPDATED;
+  }
+
+  if (
+    normalized === CHAT_SOCKET_EVENT_RAW.GROUP_INVITE_CREATED ||
+    normalized === "group_invite_received"
+  ) {
+    return CHAT_SOCKET_EVENT_TYPE.GROUP_INVITE_RECEIVED;
+  }
+
+  if (
+    normalized === CHAT_SOCKET_EVENT_RAW.GROUP_INVITE_UPDATED ||
+    normalized === "group_invite_updated"
+  ) {
+    return CHAT_SOCKET_EVENT_TYPE.GROUP_INVITE_UPDATED;
+  }
+
+  return undefined;
+}
+
+function normalizeCollection(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== "object") return [];
+
+  const obj = data as Record<string, unknown>;
+  if (Array.isArray(obj.items)) return obj.items;
+  if (Array.isArray(obj.content)) return obj.content;
+  if (Array.isArray(obj.data)) return obj.data;
+  return [];
+}
+
+export async function getFriends(userId?: number): Promise<Friend[]> {
+  const data = await api<unknown>(`${BASE}/friends`, {
     headers: withUserHeader(userId),
   });
 
-  const rawItems =
-    (Array.isArray(data) && data) ||
-    (data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).content)
-      ? ((data as Record<string, unknown>).content as unknown[])
-      : []);
+  return normalizeCollection(data)
+    .map((item) => normalizeFriend(item))
+    .filter((item): item is Friend => Boolean(item));
+}
 
-  return rawItems
-    .map((item) => normalizeConversation(item))
-    .filter((item): item is ChatConversation => !!item);
+export async function getFriendRequests(
+  direction: FriendRequestDirection,
+  userId?: number,
+): Promise<FriendRequest[]> {
+  const qs = new URLSearchParams({ type: direction });
+  const data = await api<unknown>(`${BASE}/friends/requests?${qs.toString()}`, {
+    headers: withUserHeader(userId),
+  });
+
+  return normalizeCollection(data)
+    .map((item) => normalizeFriendRequest(item, direction))
+    .filter((item): item is FriendRequest => Boolean(item));
+}
+
+export async function createFriendRequest(targetUserId: number, userId?: number) {
+  await api<void>(`${BASE}/friends/requests`, {
+    method: "POST",
+    headers: withUserHeader(userId),
+    data: { targetUserId },
+  });
+}
+
+export async function acceptFriendRequest(requestId: number, userId?: number) {
+  await api<void>(`${BASE}/friends/requests/${requestId}/accept`, {
+    method: "POST",
+    headers: withUserHeader(userId),
+  });
+}
+
+export async function rejectFriendRequest(requestId: number, userId?: number) {
+  await api<void>(`${BASE}/friends/requests/${requestId}/reject`, {
+    method: "POST",
+    headers: withUserHeader(userId),
+  });
+}
+
+export async function cancelFriendRequest(requestId: number, userId?: number) {
+  await api<void>(`${BASE}/friends/requests/${requestId}`, {
+    method: "DELETE",
+    headers: withUserHeader(userId),
+    suppressForbiddenRedirect: true,
+  });
+}
+
+export async function removeFriend(friendUserId: number, userId?: number) {
+  await api<void>(`${BASE}/friends/${friendUserId}`, {
+    method: "DELETE",
+    headers: withUserHeader(userId),
+  });
+}
+
+export async function blockUser(targetUserId: number, userId?: number) {
+  await api<void>(`${BASE}/friends/${targetUserId}/block`, {
+    method: "POST",
+    headers: withUserHeader(userId),
+  });
+}
+
+export async function getChatThreads(
+  type: ChatThreadType,
+  userId?: number,
+): Promise<ChatThread[]> {
+  const qs = new URLSearchParams({ type });
+
+  try {
+    const data = await api<unknown>(`${BASE}/chats/threads?${qs.toString()}`, {
+      headers: withUserHeader(userId),
+    });
+
+    return normalizeCollection(data)
+      .map((item) => normalizeThread(item, type))
+      .filter((item): item is ChatThread => Boolean(item));
+  } catch {
+    const legacy = await api<unknown>(`${BASE}/chat/conversations`, {
+      headers: withUserHeader(userId),
+    });
+
+    return normalizeCollection(legacy)
+      .map((item) => normalizeThread(item))
+      .filter((item): item is ChatThread => Boolean(item))
+      .filter((item) => item.type === type);
+  }
+}
+
+export async function hideChatThread(threadId: number, userId?: number) {
+  await api<void>(`${BASE}/chats/threads/${threadId}/hide`, {
+    method: "PATCH",
+    headers: withUserHeader(userId),
+  });
+}
+
+export async function unhideChatThread(threadId: number, userId?: number) {
+  await api<void>(`${BASE}/chats/threads/${threadId}/unhide`, {
+    method: "PATCH",
+    headers: withUserHeader(userId),
+  });
+}
+
+export async function clearMyThreadMessages(threadId: number, userId?: number) {
+  await api<void>(`${BASE}/chats/threads/${threadId}/messages/me`, {
+    method: "DELETE",
+    headers: withUserHeader(userId),
+  });
+}
+
+export async function createDirectConversation(friendUserId: number, userId?: number) {
+  try {
+    const data = await api<unknown>(`${BASE}/chats/direct/start`, {
+      method: "POST",
+      headers: withUserHeader(userId),
+      data: { friendUserId },
+    });
+
+    const normalized = normalizeThread(data, CHAT_THREAD_TYPE.DIRECT);
+    if (!normalized) {
+      throw new Error("1:1 대화방 생성 응답 형식이 올바르지 않습니다.");
+    }
+    return normalized;
+  } catch {
+    const legacy = await api<unknown>(
+      `${BASE}/chat/conversations/direct/${friendUserId}`,
+      {
+        method: "POST",
+        headers: withUserHeader(userId),
+      },
+    );
+
+    const normalized = normalizeThread(legacy, CHAT_THREAD_TYPE.DIRECT);
+    if (!normalized) {
+      throw new Error("1:1 대화방 생성 응답 형식이 올바르지 않습니다.");
+    }
+    return normalized;
+  }
+}
+
+export async function createConversation(
+  req: CreateConversationRequest,
+  userId?: number,
+) {
+  try {
+    const data = await api<unknown>(`${BASE}/chats/threads`, {
+      method: "POST",
+      headers: withUserHeader(userId),
+      data: req,
+    });
+
+    const normalized = normalizeThread(data, CHAT_THREAD_TYPE.GROUP);
+    if (!normalized) throw new Error("대화방 생성 응답 형식이 올바르지 않습니다.");
+    return normalized;
+  } catch {
+    const legacy = await api<unknown>(`${BASE}/chat/conversations`, {
+      method: "POST",
+      headers: withUserHeader(userId),
+      data: req,
+    });
+
+    const normalized = normalizeThread(legacy, CHAT_THREAD_TYPE.GROUP);
+    if (!normalized) throw new Error("대화방 생성 응답 형식이 올바르지 않습니다.");
+    return normalized;
+  }
+}
+
+export async function createGroupInvites(
+  req: CreateGroupInviteRequest,
+  userId?: number,
+) {
+  await api<void>(`${BASE}/chats/groups/${req.groupId}/invites`, {
+    method: "POST",
+    headers: withUserHeader(userId),
+    data: {
+      targetUserIds: req.targetUserIds,
+    },
+  });
+}
+
+export async function getPendingGroupInvites(userId?: number): Promise<GroupInvite[]> {
+  const qs = new URLSearchParams({ status: GROUP_INVITE_STATUS.PENDING });
+  const data = await api<unknown>(`${BASE}/chats/invites?${qs.toString()}`, {
+    headers: withUserHeader(userId),
+  });
+
+  return normalizeCollection(data)
+    .map((item) => normalizeGroupInvite(item))
+    .filter((item): item is GroupInvite => Boolean(item));
+}
+
+export async function acceptGroupInvite(inviteId: number, userId?: number) {
+  await api<void>(`${BASE}/chats/invites/${inviteId}/accept`, {
+    method: "POST",
+    headers: withUserHeader(userId),
+  });
+}
+
+export async function rejectGroupInvite(inviteId: number, userId?: number) {
+  await api<void>(`${BASE}/chats/invites/${inviteId}/reject`, {
+    method: "POST",
+    headers: withUserHeader(userId),
+  });
+}
+
+export async function leaveGroupChat(groupId: number, userId?: number) {
+  await api<void>(`${BASE}/chats/groups/${groupId}/leave`, {
+    method: "POST",
+    headers: withUserHeader(userId),
+  });
 }
 
 export async function getChatUsers(userId?: number) {
@@ -395,41 +849,9 @@ export async function getChatUsers(userId?: number) {
     headers: withUserHeader(userId),
   });
 
-  const rawItems =
-    (Array.isArray(data) && data) ||
-    (data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).content)
-      ? ((data as Record<string, unknown>).content as unknown[])
-      : []);
-
-  return rawItems
+  return normalizeCollection(data)
     .map((item) => normalizeUser(item))
-    .filter((item): item is ChatUser => !!item);
-}
-
-export async function createConversation(
-  req: CreateConversationRequest,
-  userId?: number,
-) {
-  const data = await api<unknown>(`${BASE}/chat/conversations`, {
-    method: "POST",
-    headers: withUserHeader(userId),
-    data: req,
-  });
-
-  const normalized = normalizeConversation(data);
-  if (!normalized) throw new Error("대화방 생성 응답 형식이 올바르지 않습니다.");
-  return normalized;
-}
-
-export async function createDirectConversation(otherUserId: number, userId?: number) {
-  const data = await api<unknown>(`${BASE}/chat/conversations/direct/${otherUserId}`, {
-    method: "POST",
-    headers: withUserHeader(userId),
-  });
-
-  const normalized = normalizeConversation(data);
-  if (!normalized) throw new Error("1:1 대화방 생성 응답 형식이 올바르지 않습니다.");
-  return normalized;
+    .filter((item): item is ChatUser => Boolean(item));
 }
 
 export async function getConversationMessages(
@@ -450,7 +872,7 @@ export async function getConversationMessages(
   const parseMessages = (items: unknown[]): ChatMessage[] =>
     items
       .map((item) => normalizeMessage(conversationId, item))
-      .filter((message): message is ChatMessage => !!message)
+      .filter((message): message is ChatMessage => Boolean(message))
       .sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
 
   if (Array.isArray(data)) {
@@ -509,22 +931,8 @@ export async function markConversationRead(
   });
 }
 
-export async function leaveConversation(
-  conversationId: number,
-): Promise<void> {
-  await api<void>(`${BASE}/chat/conversations/${conversationId}`, {
-    method: "DELETE",
-  });
-}
-
 export function toChatMessage(conversationId: number, raw: unknown): ChatMessage | null {
   return normalizeMessage(conversationId, raw);
-}
-
-function normalizeUnreadEventType(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 export function toConversationUnreadCountEvent(
@@ -533,7 +941,7 @@ export function toConversationUnreadCountEvent(
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
 
-  const type = normalizeUnreadEventType(obj.type);
+  const type = normalizeEventType(obj.type);
   if (type !== "CONVERSATION_UNREAD_COUNT_UPDATED") return null;
 
   const conversationId = toFiniteNumber(obj.conversationId);
@@ -554,4 +962,53 @@ export function toConversationUnreadCountEvent(
     unreadMessageCount,
     totalUnreadMessageCount,
   };
+}
+
+export function toChatUserEvent(raw: unknown): ChatUserEvent | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+
+  const rawType =
+    normalizeEventType(obj.type) ||
+    normalizeEventType(obj.eventType) ||
+    normalizeEventType(obj.event_name);
+
+  if (!rawType) return null;
+
+  const type = mapEventType(rawType);
+  if (!type) return null;
+
+  const payloadCandidate =
+    (obj.payload && typeof obj.payload === "object"
+      ? (obj.payload as Record<string, unknown>)
+      : undefined) ||
+    (obj.data && typeof obj.data === "object"
+      ? (obj.data as Record<string, unknown>)
+      : undefined) ||
+    obj;
+
+  return {
+    type,
+    rawType,
+    payload: payloadCandidate,
+  };
+}
+
+export function toThreadFromEventPayload(
+  payload: Record<string, unknown>,
+): ChatThread | null {
+  return normalizeThread(payload);
+}
+
+export function toFriendRequestFromEventPayload(
+  payload: Record<string, unknown>,
+  direction: FriendRequestDirection,
+): FriendRequest | null {
+  return normalizeFriendRequest(payload, direction);
+}
+
+export function toGroupInviteFromEventPayload(
+  payload: Record<string, unknown>,
+): GroupInvite | null {
+  return normalizeGroupInvite(payload);
 }

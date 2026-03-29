@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { SendHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ActionDialog, Button } from "@/shared/ui";
 import useActionDialog from "@/shared/hooks/useActionDialog";
@@ -8,6 +9,7 @@ import {
   sendChatMessage,
   subscribeChat,
 } from "@/shared/socket/stompClient";
+import { CHAT_THREAD_TYPE } from "../chat.enums";
 import { toChatMessage, type ChatConversation, type ChatMessage } from "../api";
 import { useConversationMessages, useMarkConversationRead } from "../queries";
 
@@ -20,10 +22,16 @@ type ChatRoomProps = {
   conversationId: number;
   currentUserId?: number;
   conversationTitle?: string;
+  conversationType?: ChatConversation["type"];
   userDisplayNames?: Record<number, string>;
   onBack?: () => void;
-  onRequestLeaveConversation?: (conversationId: number) => void;
-  isLeavingConversation?: boolean;
+  onRequestLeaveGroup?: (threadId: number) => void;
+  onRequestHideThread?: (threadId: number) => void;
+  onRequestClearMyMessages?: (threadId: number) => void;
+  onRequestInviteMembers?: (threadId: number) => void;
+  isLeavingGroup?: boolean;
+  isHidingThread?: boolean;
+  isClearingMyMessages?: boolean;
   isMobileFullscreen?: boolean;
   className?: string;
 };
@@ -66,10 +74,16 @@ export default function ChatRoom({
   conversationId,
   currentUserId,
   conversationTitle,
+  conversationType,
   userDisplayNames,
   onBack,
-  onRequestLeaveConversation,
-  isLeavingConversation = false,
+  onRequestLeaveGroup,
+  onRequestHideThread,
+  onRequestClearMyMessages,
+  onRequestInviteMembers,
+  isLeavingGroup = false,
+  isHidingThread = false,
+  isClearingMyMessages = false,
   isMobileFullscreen = false,
   className,
 }: ChatRoomProps) {
@@ -92,6 +106,12 @@ export default function ChatRoom({
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useConversationMessages(conversationId, currentUserId);
   const readMutation = useMarkConversationRead(currentUserId);
+  const isDirectConversation =
+    typeof conversationType === "string" &&
+    conversationType.toUpperCase() === CHAT_THREAD_TYPE.DIRECT;
+  const isGroupConversation =
+    typeof conversationType === "string" &&
+    conversationType.toUpperCase() === CHAT_THREAD_TYPE.GROUP;
 
   const baseMessages = useMemo(() => {
     const pages = data?.pages || [];
@@ -285,6 +305,24 @@ export default function ChatRoom({
         queryKey: ["chat", "messages", conversationId],
       });
       queryClient.setQueriesData<ChatConversation[]>(
+        { queryKey: ["chat", "threads"] },
+        (prev) => {
+          if (!Array.isArray(prev)) return prev;
+          let hasChanged = false;
+          const next = prev.map((conversation) => {
+            if (conversation.id !== conversationId) return conversation;
+            hasChanged = true;
+            return {
+              ...conversation,
+              lastMessage: message.content,
+              updatedAt: message.createdAt || conversation.updatedAt,
+            };
+          });
+          return hasChanged ? next : prev;
+        },
+      );
+
+      queryClient.setQueriesData<ChatConversation[]>(
         { queryKey: ["chat", "conversations"] },
         (prev) => {
           if (!Array.isArray(prev)) return prev;
@@ -425,7 +463,7 @@ export default function ChatRoom({
         className={cn(
           "border-b border-slate-200 bg-white px-3 py-3 sm:px-4 dark:border-slate-700 dark:bg-slate-900",
           isMobileFullscreen &&
-            "z-20 shrink-0 border-x-0 pt-[env(safe-area-inset-top)] shadow-sm",
+            "shrink-0 border-x-0 pt-[env(safe-area-inset-top)] shadow-sm",
         )}
       >
         <div className="flex items-center justify-between gap-3">
@@ -449,19 +487,58 @@ export default function ChatRoom({
               </p>
             </div>
           </div>
-          {onRequestLeaveConversation && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onRequestLeaveConversation(conversationId)}
-              isLoading={isLeavingConversation}
-              loadingText="나가는 중..."
-              className="h-8 rounded-lg border-rose-200 bg-white px-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/30"
-            >
-              나가기
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {isGroupConversation && onRequestInviteMembers && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onRequestInviteMembers(conversationId)}
+                className="h-8 rounded-lg border-blue-200 bg-white px-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50 dark:border-blue-900/70 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-950/30"
+              >
+                멤버 초대
+              </Button>
+            )}
+            {isGroupConversation && onRequestLeaveGroup && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onRequestLeaveGroup(conversationId)}
+                isLoading={isLeavingGroup}
+                loadingText="나가는 중..."
+                className="h-8 rounded-lg border-rose-200 bg-white px-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/30"
+              >
+                나가기
+              </Button>
+            )}
+            {onRequestHideThread && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onRequestHideThread(conversationId)}
+                isLoading={isHidingThread}
+                loadingText="숨기는 중..."
+                className="h-8 rounded-lg border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                숨기기
+              </Button>
+            )}
+            {isDirectConversation && onRequestClearMyMessages && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onRequestClearMyMessages(conversationId)}
+                isLoading={isClearingMyMessages}
+                loadingText="삭제 중..."
+                className="h-8 rounded-lg border-rose-200 bg-white px-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/30"
+              >
+                내 기록 삭제
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -469,10 +546,10 @@ export default function ChatRoom({
         ref={listRef}
         onScroll={handleScroll}
         className={cn(
-          "min-h-0 space-y-2 overflow-y-auto overscroll-contain bg-slate-50/70 dark:bg-slate-950/70",
+          "h-0 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-slate-50/70 dark:bg-slate-950/70",
           isMobileFullscreen
-            ? "flex-1 px-2.5 py-2.5"
-            : "flex-1 px-3 py-3 sm:px-4",
+            ? "px-2.5 py-2.5"
+            : "px-3 py-3 sm:px-4",
         )}
         style={
           isMobileFullscreen
@@ -570,18 +647,26 @@ export default function ChatRoom({
                 isComposingRef.current = false;
               }}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  if (
-                    isComposingRef.current ||
-                    event.nativeEvent.isComposing ||
-                    event.repeat
-                  ) {
-                    return;
-                  }
-                  event.preventDefault();
-                  handleSend();
+                if (event.key !== "Enter") return;
+                if (
+                  isMobileFullscreen ||
+                  (typeof window !== "undefined" &&
+                    window.matchMedia("(pointer: coarse)").matches)
+                ) {
+                  return;
                 }
+                if (event.shiftKey) return;
+                if (
+                  isComposingRef.current ||
+                  event.nativeEvent.isComposing ||
+                  event.repeat
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                handleSend();
               }}
+              enterKeyHint={isMobileFullscreen ? "enter" : "send"}
               placeholder="메시지를 입력하세요"
               rows={isMobileFullscreen ? 1 : 2}
               className={cn(
@@ -597,14 +682,18 @@ export default function ChatRoom({
                 event.preventDefault();
               }}
               onClick={handleSendFromButton}
+              aria-label="메시지 전송"
               className={cn(
-                "shrink-0 rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700",
+                "shrink-0 rounded-xl bg-blue-600 text-white hover:bg-blue-700",
                 isMobileFullscreen
-                  ? "h-[38px] px-3 text-[12px]"
-                  : "h-16 px-4 text-sm",
+                  ? "h-[38px] w-[38px] p-0"
+                  : "h-10 w-10 p-0",
               )}
             >
-              전송
+              <SendHorizontal
+                className={isMobileFullscreen ? "h-4 w-4" : "h-[18px] w-[18px]"}
+                aria-hidden="true"
+              />
             </Button>
           </div>
         </div>

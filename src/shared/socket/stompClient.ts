@@ -13,6 +13,7 @@ type SocketState = "idle" | "connecting" | "connected";
 type ChatCallback = (payload: unknown) => void;
 type NotificationCallback = (payload: unknown) => void;
 type ConversationUnreadCountCallback = (payload: unknown) => void;
+type UserEventCallback = (payload: unknown) => void;
 type SocketConnectedCallback = (payload: { isReconnect: boolean; connectedAt: number }) => void;
 
 type ClientFrameDebug = {
@@ -26,7 +27,7 @@ type ClientFrameDebug = {
 };
 
 type SendFrameDebug = ClientFrameDebug & {
-  payload?: string;
+  payloadSize?: number;
 };
 
 const chatHandlers = new Map<number, Set<ChatCallback>>();
@@ -35,6 +36,8 @@ const notificationHandlers = new Set<NotificationCallback>();
 const notificationSubscriptionIds = new Set<string>();
 const unreadCountHandlers = new Map<number, Set<ConversationUnreadCountCallback>>();
 const unreadCountSubscriptionIds = new Map<number, string>();
+const userEventHandlers = new Map<number, Set<UserEventCallback>>();
+const userEventSubscriptionIds = new Map<number, string[]>();
 const socketConnectedHandlers = new Set<SocketConnectedCallback>();
 
 let ws: WebSocket | null = null;
@@ -170,7 +173,7 @@ function sendFrame(command: string, headers: Record<string, string> = {}, body =
   if (command === "SEND") {
     lastSendDebug = {
       ...lastClientFrameDebug,
-      payload: body,
+      payloadSize: body.length,
     };
   }
   ws.send(buildFrame(command, headers, body));
@@ -222,6 +225,40 @@ function parseUnreadUserId(destination?: string, subscription?: string): number 
   return null;
 }
 
+function parseUserEventUserId(destination?: string, subscription?: string): number | null {
+  if (destination?.startsWith("/topic/users/")) {
+    const maybeUserId = Number(destination.split("/")[3]);
+    if (Number.isFinite(maybeUserId)) return maybeUserId;
+  }
+
+  if (destination?.startsWith("/topic/user-events/")) {
+    const maybeUserId = Number(destination.split("/").pop());
+    if (Number.isFinite(maybeUserId)) return maybeUserId;
+  }
+
+  if (typeof subscription === "string") {
+    const matched = subscription.match(/^chat-user-event-sub-(\d+)-/);
+    if (matched) {
+      const fromSubscription = Number(matched[1]);
+      if (Number.isFinite(fromSubscription)) return fromSubscription;
+    }
+  }
+
+  return null;
+}
+
+function dispatchUserEventPayload(userId: number | null, payload: unknown) {
+  if (typeof userId === "number") {
+    const handlers = userEventHandlers.get(userId);
+    handlers?.forEach((handler) => handler(payload));
+    return;
+  }
+
+  userEventHandlers.forEach((handlers) => {
+    handlers.forEach((handler) => handler(payload));
+  });
+}
+
 function connectByCandidates(index = 0) {
   if (typeof window === "undefined") return;
   if (index >= wsCandidates.length) {
@@ -258,9 +295,11 @@ function connectByCandidates(index = 0) {
       ...authHeaders,
     };
 
-    console.info(
-      `[stomp] CONNECT headers hasAuthorizationHeader=${Boolean(connectHeaders.Authorization)} hasXUserIdHeader=${Boolean(connectHeaders["X-User-Id"])} userId=${connectHeaders["X-User-Id"] ?? "null"}`,
-    );
+    if (isStompDebugEnabled) {
+      console.debug(
+        `[stomp] CONNECT headers hasAuthorizationHeader=${Boolean(connectHeaders.Authorization)} hasXUserIdHeader=${Boolean(connectHeaders["X-User-Id"])}`,
+      );
+    }
 
     sendFrame("CONNECT", connectHeaders);
   };
@@ -319,6 +358,16 @@ function connectByCandidates(index = 0) {
             const handlers = unreadCountHandlers.get(unreadUserId);
             handlers?.forEach((handler) => handler(payload));
           }
+        }
+
+        if (
+          destination?.startsWith("/topic/users/") ||
+          destination?.startsWith("/topic/user-events/") ||
+          destination === "/user/queue/events" ||
+          subscription?.startsWith("chat-user-event-sub-")
+        ) {
+          const userIdFromEvent = parseUserEventUserId(destination, subscription);
+          dispatchUserEventPayload(userIdFromEvent, payload);
         }
       }
 
@@ -386,9 +435,66 @@ function resubscribeAll() {
     subscribeUnreadCountTopic(userId);
   }
 
+  for (const [userId] of userEventHandlers.entries()) {
+    subscribeUserEventChannels(userId);
+  }
+
   if (notificationHandlers.size > 0) {
     subscribeNotificationChannels();
   }
+}
+
+function subscribeUserEventChannels(userId: number) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const existing = userEventSubscriptionIds.get(userId);
+  if (existing && existing.length > 0) return;
+
+  const authHeaders = buildAuthHeaders(userId);
+  const subscriptions: Array<{ id: string; destination: string }> = [
+    {
+      id: `chat-user-event-sub-${userId}-queue-${nextId("cueq")}`,
+      destination: "/user/queue/events",
+    },
+    {
+      id: `chat-user-event-sub-${userId}-topic-${nextId("cuet")}`,
+      destination: `/topic/users/${userId}/events`,
+    },
+    {
+      id: `chat-user-event-sub-${userId}-topic-flat-${nextId("cuef")}`,
+      destination: `/topic/users/${userId}`,
+    },
+    {
+      id: `chat-user-event-sub-${userId}-topic-alt-${nextId("cuea")}`,
+      destination: `/topic/user-events/${userId}`,
+    },
+  ];
+
+  subscriptions.forEach((item) => {
+    sendFrame("SUBSCRIBE", {
+      id: item.id,
+      destination: item.destination,
+      ...authHeaders,
+    });
+  });
+
+  userEventSubscriptionIds.set(
+    userId,
+    subscriptions.map((item) => item.id),
+  );
+}
+
+function unsubscribeUserEventChannels(userId: number) {
+  const subIds = userEventSubscriptionIds.get(userId);
+  if (!subIds || subIds.length === 0) return;
+
+  const authHeaders = buildAuthHeaders(userId);
+  subIds.forEach((id) => {
+    sendFrame("UNSUBSCRIBE", {
+      id,
+      ...authHeaders,
+    });
+  });
+  userEventSubscriptionIds.delete(userId);
 }
 
 function subscribeChatTopic(conversationId: number) {
@@ -518,6 +624,7 @@ export function disconnect() {
   preferredUserId = undefined;
   chatSubscriptionIds.clear();
   unreadCountSubscriptionIds.clear();
+  userEventSubscriptionIds.clear();
 }
 
 export function subscribeChat(conversationId: number, callback: ChatCallback) {
@@ -575,6 +682,25 @@ export function subscribeConversationUnreadCounts(
     if (current.size === 0) {
       unreadCountHandlers.delete(userId);
       unsubscribeUnreadCountTopic(userId);
+    }
+  };
+}
+
+export function subscribeUserEvents(userId: number, callback: UserEventCallback) {
+  const handlers = userEventHandlers.get(userId) ?? new Set<UserEventCallback>();
+  handlers.add(callback);
+  userEventHandlers.set(userId, handlers);
+
+  ensureConnected();
+  subscribeUserEventChannels(userId);
+
+  return () => {
+    const current = userEventHandlers.get(userId);
+    if (!current) return;
+    current.delete(callback);
+    if (current.size === 0) {
+      userEventHandlers.delete(userId);
+      unsubscribeUserEventChannels(userId);
     }
   };
 }
