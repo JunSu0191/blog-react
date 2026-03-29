@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ApiError } from "@/shared/lib/api";
+import { isUnauthorizedError, type ApiError } from "@/shared/lib/api";
 import { showErrorToast } from "@/shared/lib/errorToast";
 import {
   getMyCommentReactionStatus,
@@ -16,6 +16,8 @@ const commentReactionQueryKey = (commentId: number) =>
 type UseCommentReactionOptions = {
   postId?: number;
   initialStatus?: Partial<CommentReactionStatus>;
+  enabled?: boolean;
+  onUnauthorized?: () => void;
 };
 
 type UpdateContext = {
@@ -100,7 +102,11 @@ export function useCommentReaction(
   const query = useQuery<CommentReactionStatus, ApiError>({
     queryKey: commentReactionQueryKey(commentId),
     queryFn: () => getMyCommentReactionStatus(commentId),
-    enabled: Number.isFinite(commentId) && commentId > 0 && shouldSyncFromServer,
+    enabled:
+      Number.isFinite(commentId) &&
+      commentId > 0 &&
+      shouldSyncFromServer &&
+      (options?.enabled ?? true),
     initialData: initialStatus,
   });
 
@@ -155,6 +161,11 @@ export function useCommentReaction(
           ["comments", options.postId],
           context.previousComments,
         );
+      }
+
+      if (isUnauthorizedError(error)) {
+        options?.onUnauthorized?.();
+        return;
       }
 
       showErrorToast(

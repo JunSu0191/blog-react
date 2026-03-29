@@ -1,12 +1,22 @@
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { Globe, MapPin, PencilLine, UserRound } from "lucide-react";
-import { Button, Input, SegmentedControl, StatCard, SurfaceCard } from "@/shared/ui";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Button,
+  Input,
+  SegmentedControl,
+  StatCard,
+  SurfaceCard,
+} from "@/shared/ui";
 import { showErrorToast } from "@/shared/lib/errorToast";
+import { Badge } from "@/components/ui";
+import { useBookmarkedPosts } from "@/features/post/queries";
+import { readBookmarkedPostIds } from "@/features/post/utils/bookmarkStorage";
 import { useMyPage } from "../hooks/useMyPage";
 import type { MyPageProfileUpdateRequest } from "../types";
 
-type ActiveTab = "posts" | "comments";
+type ActiveTab = "overview" | "posts" | "comments" | "saved" | "settings";
 
 function formatDate(raw?: string) {
   if (!raw) return "날짜 없음";
@@ -27,10 +37,14 @@ function toPlainText(content?: string) {
     return (doc.body.textContent || "").replace(/\s+/g, " ").trim();
   }
 
-  return content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return content
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export default function MyPage() {
+  const isMobile = useIsMobile();
   const {
     summary,
     posts,
@@ -41,7 +55,8 @@ export default function MyPage() {
     updateProfile,
     isUpdatingProfile,
   } = useMyPage();
-  const [activeTab, setActiveTab] = useState<ActiveTab>("posts");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
+  const [bookmarkedPostIds, setBookmarkedPostIds] = useState<number[]>([]);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState<MyPageProfileUpdateRequest>({
     name: "",
@@ -51,7 +66,9 @@ export default function MyPage() {
     websiteUrl: "",
     location: "",
   });
-  const avatarLabel = summary?.profile.displayName || summary?.name || summary?.username || "U";
+  const avatarLabel =
+    summary?.profile.displayName || summary?.name || summary?.username || "U";
+  const bookmarkedPostsQuery = useBookmarkedPosts(bookmarkedPostIds);
 
   useEffect(() => {
     if (!summary || isEditingProfile) return;
@@ -65,6 +82,10 @@ export default function MyPage() {
     });
   }, [isEditingProfile, summary]);
 
+  useEffect(() => {
+    setBookmarkedPostIds(readBookmarkedPostIds());
+  }, []);
+
   const errorMessage = useMemo(() => {
     return (
       errors.summary?.message ||
@@ -72,7 +93,11 @@ export default function MyPage() {
       errors.comments?.message ||
       "마이페이지 데이터를 불러오지 못했습니다."
     );
-  }, [errors.comments?.message, errors.posts?.message, errors.summary?.message]);
+  }, [
+    errors.comments?.message,
+    errors.posts?.message,
+    errors.summary?.message,
+  ]);
 
   const handleProfileFieldChange = (
     key: keyof MyPageProfileUpdateRequest,
@@ -122,7 +147,9 @@ export default function MyPage() {
     return (
       <div className="route-enter flex min-h-[48vh] flex-col items-center justify-center gap-3">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
-        <p className="text-sm font-semibold text-slate-500">마이페이지 로딩 중...</p>
+        <p className="text-sm font-semibold text-slate-500">
+          마이페이지 로딩 중...
+        </p>
       </div>
     );
   }
@@ -139,7 +166,7 @@ export default function MyPage() {
     <div className="route-enter space-y-4 sm:space-y-5">
       <SurfaceCard className="rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
+          <div className="flex min-w-0 items-center gap-4">
             {summary.profile.avatarUrl ? (
               <img
                 src={summary.profile.avatarUrl}
@@ -154,9 +181,6 @@ export default function MyPage() {
             <div className="min-w-0">
               <p className="line-clamp-1 text-xl font-black text-slate-900 dark:text-slate-100">
                 {summary.name}
-              </p>
-              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-                @{summary.username}
               </p>
               {summary.profile.displayName && (
                 <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-300">
@@ -190,16 +214,28 @@ export default function MyPage() {
             </div>
           </div>
           {!isEditingProfile ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-xl"
-              onClick={() => setIsEditingProfile(true)}
-            >
-              <PencilLine className="h-4 w-4" />
-              프로필 수정
-            </Button>
+            <div className="flex items-center gap-2">
+              <Link to="/mypage/blog-customize">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl"
+                >
+                  블로그 꾸미기
+                </Button>
+              </Link>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => setIsEditingProfile(true)}
+              >
+                <PencilLine className="h-4 w-4" />
+                프로필 수정
+              </Button>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <Button
@@ -232,33 +268,45 @@ export default function MyPage() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Input
               value={profileForm.name}
-              onChange={(event) => handleProfileFieldChange("name", event.target.value)}
+              onChange={(event) =>
+                handleProfileFieldChange("name", event.target.value)
+              }
               placeholder="이름"
             />
             <Input
               value={profileForm.displayName ?? ""}
-              onChange={(event) => handleProfileFieldChange("displayName", event.target.value)}
+              onChange={(event) =>
+                handleProfileFieldChange("displayName", event.target.value)
+              }
               placeholder="표시 이름"
             />
             <Input
               value={profileForm.avatarUrl ?? ""}
-              onChange={(event) => handleProfileFieldChange("avatarUrl", event.target.value)}
+              onChange={(event) =>
+                handleProfileFieldChange("avatarUrl", event.target.value)
+              }
               placeholder="아바타 URL"
             />
             <Input
               value={profileForm.websiteUrl ?? ""}
-              onChange={(event) => handleProfileFieldChange("websiteUrl", event.target.value)}
+              onChange={(event) =>
+                handleProfileFieldChange("websiteUrl", event.target.value)
+              }
               placeholder="웹사이트 URL"
             />
             <Input
               value={profileForm.location ?? ""}
-              onChange={(event) => handleProfileFieldChange("location", event.target.value)}
+              onChange={(event) =>
+                handleProfileFieldChange("location", event.target.value)
+              }
               placeholder="위치"
             />
             <div className="sm:col-span-2">
               <textarea
                 value={profileForm.bio ?? ""}
-                onChange={(event) => handleProfileFieldChange("bio", event.target.value)}
+                onChange={(event) =>
+                  handleProfileFieldChange("bio", event.target.value)
+                }
                 rows={4}
                 className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 placeholder="소개"
@@ -270,27 +318,144 @@ export default function MyPage() {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard label="게시글" value={summary.stats.postCount} tone="info" />
-        <StatCard label="댓글" value={summary.stats.commentCount} tone="success" />
-        <StatCard label="좋아요한 게시글" value={summary.stats.likedPostCount} tone="warning" />
+        <StatCard
+          label="댓글"
+          value={summary.stats.commentCount}
+          tone="success"
+        />
+        <StatCard
+          label="좋아요한 게시글"
+          value={summary.stats.likedPostCount}
+          tone="warning"
+        />
       </div>
 
       <SurfaceCard className="space-y-4 rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
-            활동 내역
-          </h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {!isMobile ? (
+            <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
+              마이 허브
+            </h2>
+          ) : null}
           <SegmentedControl<ActiveTab>
             value={activeTab}
             onChange={setActiveTab}
             options={[
-              { value: "posts", label: "내 게시글" },
-              { value: "comments", label: "내 댓글" },
+              { value: "overview", label: "개요" },
+              { value: "posts", label: isMobile ? "게시글" : "내 게시글" },
+              { value: "comments", label: isMobile ? "댓글" : "내 댓글" },
+              { value: "saved", label: isMobile ? "저장" : "저장/좋아요" },
+              { value: "settings", label: "설정" },
             ]}
-            className="w-[220px]"
+            className="w-full max-w-[520px] sm:ml-auto"
+            buttonClassName={isMobile ? "min-w-0 px-2 text-[11px] sm:text-[13px]" : undefined}
           />
         </div>
 
-        {activeTab === "posts" ? (
+        {activeTab === "overview" ? (
+          <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+                    최근 작성 글
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    창작자 관점에서 가장 최근 작업한 글입니다.
+                  </p>
+                </div>
+                <Badge className="bg-blue-600 text-white hover:bg-blue-600">
+                  {summary.stats.postCount} posts
+                </Badge>
+              </div>
+              {posts.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                  아직 작성한 게시글이 없습니다.
+                </div>
+              ) : (
+                posts.slice(0, 3).map((post) => (
+                  <Link
+                    key={post.id}
+                    to={`/posts/${post.id}`}
+                    className="block rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
+                  >
+                    <p className="line-clamp-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {post.title}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {formatDate(post.createdAt)}
+                    </p>
+                  </Link>
+                ))
+              )}
+            </div>
+
+            <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+                    활동 요약
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    댓글과 반응, 블로그 설정으로 바로 이동할 수 있습니다.
+                  </p>
+                </div>
+                <Badge variant="outline" className="border-blue-200 text-blue-700 dark:border-blue-900/60 dark:text-blue-300">
+                  creator hub
+                </Badge>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Link
+                  to="/mypage/blog-customize"
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
+                >
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    블로그 꾸미기
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    커버, 강조색, 레이아웃 설정
+                  </p>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("saved")}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
+                >
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    저장/좋아요
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    좋아요한 게시글 {summary.stats.likedPostCount}개
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("comments")}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
+                >
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    내 댓글
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    작성한 댓글 {summary.stats.commentCount}개
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("settings")}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
+                >
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    계정/프로필 설정
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    프로필 수정과 공개 정보 관리
+                  </p>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : activeTab === "posts" ? (
           <div className="space-y-2">
             {posts.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
@@ -316,15 +481,19 @@ export default function MyPage() {
                     )}
                     <div className="mt-2 flex items-center gap-3 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                       <span>{formatDate(post.createdAt)}</span>
-                      {typeof post.likeCount === "number" && <span>좋아요 {post.likeCount}</span>}
-                      {typeof post.commentCount === "number" && <span>댓글 {post.commentCount}</span>}
+                      {typeof post.likeCount === "number" && (
+                        <span>좋아요 {post.likeCount}</span>
+                      )}
+                      {typeof post.commentCount === "number" && (
+                        <span>댓글 {post.commentCount}</span>
+                      )}
                     </div>
                   </Link>
                 );
               })
             )}
           </div>
-        ) : (
+        ) : activeTab === "comments" ? (
           <div className="space-y-2">
             {comments.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
@@ -346,8 +515,12 @@ export default function MyPage() {
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                     <span>{formatDate(comment.createdAt)}</span>
-                    {typeof comment.likeCount === "number" && <span>좋아요 {comment.likeCount}</span>}
-                    {typeof comment.dislikeCount === "number" && <span>싫어요 {comment.dislikeCount}</span>}
+                    {typeof comment.likeCount === "number" && (
+                      <span>좋아요 {comment.likeCount}</span>
+                    )}
+                    {typeof comment.dislikeCount === "number" && (
+                      <span>싫어요 {comment.dislikeCount}</span>
+                    )}
                     {comment.myReaction && comment.myReaction !== "NONE" && (
                       <span className="inline-flex items-center rounded-md bg-blue-600/10 px-1.5 py-0.5 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300">
                         내 반응 {comment.myReaction}
@@ -366,6 +539,82 @@ export default function MyPage() {
                 </div>
               ))
             )}
+          </div>
+        ) : activeTab === "saved" ? (
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+              <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+                저장/좋아요한 글
+              </p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                좋아요 집계는 {summary.stats.likedPostCount}개이고, 저장한 글은 상세 화면에서 북마크한 글을 기준으로 보여줍니다.
+              </p>
+            </div>
+            {bookmarkedPostsQuery.isLoading ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                저장한 글을 불러오는 중...
+              </div>
+            ) : bookmarkedPostsQuery.items.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                아직 저장한 글이 없습니다. 상세 화면에서 북마크한 글이 여기에 쌓입니다.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {bookmarkedPostsQuery.items.map((post) => (
+                  <Link
+                    key={post.id}
+                    to={`/posts/${post.id}`}
+                    className="block rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="line-clamp-1 text-sm font-black text-slate-900 dark:text-slate-100">
+                          {post.title}
+                        </p>
+                        {post.subtitle ? (
+                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                            {post.subtitle}
+                          </p>
+                        ) : null}
+                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                          {post.category?.name || "미분류"} · {formatDate(post.publishedAt || post.createdAt)} · {post.readTimeMinutes}분 읽기
+                        </p>
+                      </div>
+                      <Badge className="bg-blue-600 text-white hover:bg-blue-600">
+                        saved
+                      </Badge>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+              <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+                블로그 설정
+              </p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                공개 블로그의 커버, 강조색, 레이아웃, 폰트 크기를 조정할 수 있습니다.
+              </p>
+              <Link to="/mypage/blog-customize" className="mt-4 inline-flex">
+                <Button type="button" className="rounded-xl bg-blue-600 text-white hover:bg-blue-700">
+                  블로그 꾸미기 열기
+                </Button>
+              </Link>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+              <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+                프로필 상태
+              </p>
+              <div className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                <p>이름: {summary.name}</p>
+                <p>표시 이름: {summary.profile.displayName || "-"}</p>
+                <p>웹사이트: {summary.profile.websiteUrl || "-"}</p>
+                <p>위치: {summary.profile.location || "-"}</p>
+              </div>
+            </div>
           </div>
         )}
       </SurfaceCard>

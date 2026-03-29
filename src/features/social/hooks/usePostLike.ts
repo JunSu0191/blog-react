@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ApiError } from "@/shared/lib/api";
+import { isUnauthorizedError, type ApiError } from "@/shared/lib/api";
 import { showErrorToast } from "@/shared/lib/errorToast";
 import {
   getMyPostLikeStatus,
@@ -12,6 +12,8 @@ const postLikeQueryKey = (postId: number) => ["post-like", postId] as const;
 
 type UsePostLikeOptions = {
   initialLikeCount?: number;
+  enabled?: boolean;
+  onUnauthorized?: () => void;
 };
 
 type ToggleContext = {
@@ -29,7 +31,7 @@ export function usePostLike(postId: number, options?: UsePostLikeOptions) {
   const query = useQuery<PostLikeStatus, ApiError>({
     queryKey: postLikeQueryKey(postId),
     queryFn: () => getMyPostLikeStatus(postId),
-    enabled: Number.isFinite(postId) && postId > 0,
+    enabled: Number.isFinite(postId) && postId > 0 && (options?.enabled ?? true),
     initialData: fallbackStatus,
   });
 
@@ -63,6 +65,10 @@ export function usePostLike(postId: number, options?: UsePostLikeOptions) {
         postLikeQueryKey(postId),
         context?.previousStatus ?? fallbackStatus,
       );
+      if (isUnauthorizedError(error)) {
+        options?.onUnauthorized?.();
+        return;
+      }
       showErrorToast(error, "좋아요 처리에 실패했습니다. 잠시 후 다시 시도해주세요.");
     },
     onSuccess: (data) => {
