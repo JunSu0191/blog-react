@@ -6,7 +6,7 @@
 [![TanStack Query](https://img.shields.io/badge/TanStack%20Query-v5-FF4154?logo=react-query&logoColor=white)](https://tanstack.com/query)
 
 실시간 커뮤니티 경험을 목표로 만든 React + TypeScript 프론트엔드입니다.  
-게시글, 댓글, 채팅, 알림, 마이페이지를 단일 앱으로 통합했고, 실시간 동기화와 모바일 UX를 핵심으로 설계했습니다.
+게시글, 댓글, 채팅, 알림, 블로그 커스터마이징, 마이페이지, 관리자 기능을 단일 앱으로 통합했고, 실시간 동기화와 모바일 UX를 핵심으로 설계했습니다.
 
 ## 프로젝트 하이라이트
 
@@ -27,11 +27,12 @@
 
 | 도메인 | 사용자 기능 | 구현 포인트 |
 | --- | --- | --- |
-| 인증 | 로그인/회원가입, 자동 로그인 | `/auth/me` 동기화, 토큰/사용자 상태 일관성 유지 |
+| 인증 | 로그인/회원가입, OAuth 콜백, 자동 로그인 | `/auth/me` 동기화, 토큰/사용자 상태 일관성 유지 |
 | 게시글 | 목록/상세/작성, 리치 텍스트 작성 | Tiptap 기반 에디터, TUS 업로드 |
 | 댓글 | 댓글 CRUD | 모달 기반 확인/안내, 반응(좋아요/싫어요) 연결 |
 | 채팅 | 대화방/메시지/읽음/나가기 | STOMP 실시간 수신, unread 이벤트 반영, 불변 캐시 업데이트 |
 | 알림 | 드롭다운/목록/읽음/전체읽음 | 실시간 수신, 미읽음 요약 캐시, 자동 무한 스크롤 |
+| 블로그 | 프로필 페이지, 블로그 커스터마이징 | 공개 프로필 조회, 개인 블로그 설정 편집 |
 | 마이페이지 | 프로필/통계/활동 내역 | 병렬 로딩, 낙관적 프로필 갱신 |
 | 관리자 | 대시보드/사용자/게시글/댓글 관리 | `/api/auth/me` role/status 가드, pageable 쿼리, 확인 모달 + 토스트 |
 
@@ -99,16 +100,20 @@ src
 ├─ app
 │  ├─ layout.tsx            # 상단/하단 네비, 전역 브릿지
 │  ├─ router.tsx            # 라우팅
-│  └─ providers.tsx         # Query/Auth/Theme/Toast Provider
+│  ├─ providers.tsx         # Query/Auth/Theme/Toast Provider
+│  └─ AppErrorBoundary.tsx  # 전역 React 에러 경계
 ├─ features
-│  ├─ user                  # 인증
+│  ├─ user                  # 로그인 / OAuth / 내 정보
+│  ├─ auth                  # 회원가입 / 계정 복구
 │  ├─ post                  # 게시글/에디터
 │  ├─ comment               # 댓글
 │  ├─ chat                  # 채팅 + 미읽음 실시간
 │  ├─ notifications         # 알림 + 실시간
-│  └─ social                # 좋아요/댓글반응/마이페이지
+│  ├─ blog                  # 블로그 프로필 / 꾸미기
+│  ├─ social                # 좋아요/댓글반응/마이페이지
+│  └─ admin                 # 운영자 콘솔
 └─ shared
-   ├─ lib                   # api/auth/network 유틸
+   ├─ lib                   # api/auth/network/monitoring 유틸
    ├─ socket                # STOMP 클라이언트
    ├─ context               # Auth/Theme
    └─ ui                    # 공통 UI
@@ -129,7 +134,7 @@ npm install
 
 ### 3) 환경 변수
 
-`.env` 파일을 생성해 값을 채우세요.
+`.env.local` 파일을 생성해 값을 채우세요. 운영 환경은 `.env.example`를 복사해서 시작하는 편이 안전합니다.
 
 ```env
 VITE_API_BASE_URL="http://localhost:8080/api"
@@ -138,10 +143,17 @@ VITE_API_BASE_URL="http://localhost:8080/api"
 | 변수 | 기본 동작 | 설명 |
 | --- | --- | --- |
 | `VITE_API_BASE_URL` | 런타임 기준 자동 계산 | REST API 베이스 URL |
+| `VITE_WEB_BASE_URL` | 현재 브라우저 origin | 웹앱 절대 URL 생성 기준 |
 | `VITE_AUTH_REFRESH_URL` | `${VITE_API_BASE_URL}/auth/refresh` | 토큰 재발급 URL |
 | `VITE_WS_URL` | 미지정 시 후보 자동 탐색 | WebSocket URL (쉼표로 다중 후보 가능) |
 | `VITE_STOMP_DEBUG` | `false` | STOMP 프레임 디버그 로그 |
 | `VITE_DEV_USER_ID` | 없음 | 개발용 사용자 ID fallback |
+| `VITE_SENTRY_DSN` | 빈 값이면 비활성화 | 프론트 에러 수집용 Sentry DSN |
+| `VITE_SENTRY_ENVIRONMENT` | `import.meta.env.MODE` | Sentry environment 태그 |
+| `VITE_SENTRY_RELEASE` | 없음 | 배포 릴리즈 버전 |
+| `VITE_SENTRY_TRACES_SAMPLE_RATE` | `0` | 성능 추적 샘플 비율 (`0`~`1`) |
+
+`VITE_SENTRY_DSN`이 비어 있으면 에러 수집은 초기화되지 않습니다.
 
 ### 4) 실행
 
@@ -206,7 +218,19 @@ npm run preview
 
 - 타입 안정성: `npm run build` 단계에서 `tsc -b` 수행
 - 코드 스타일: ESLint 적용
-- 현재 저장소에는 채팅 표시 로직 테스트 스펙(`tests/features/chat`)이 포함되어 있습니다.
+- 현재 ESLint는 저장소 전반의 기존 warning을 일부 보고할 수 있으며, 서비스 배포 전에는 warning budget을 따로 정리하는 편이 좋습니다.
+
+## 모니터링
+
+- Sentry는 `src/shared/lib/monitoring.ts`에서 초기화되며, `VITE_SENTRY_DSN`이 있을 때만 활성화됩니다.
+- React Error Boundary와 TanStack Query 전역 에러를 함께 수집합니다.
+- 인증 실패(401/403)와 단순 미존재(404)는 노이즈를 줄이기 위해 기본적으로 전송하지 않습니다.
+
+## 번들 최적화
+
+- 라우트는 기본적으로 lazy import를 사용합니다.
+- 작성 화면 에디터는 `React.lazy` 경계로 분리되어 최초 앱 진입 청크와 분리됩니다.
+- Vite `manualChunks`는 `editor`, `charts`, `ui-kit`, `monitoring`, `icons` 단위로 쪼개 운영 화면과 글쓰기 화면의 초기 부담을 줄이도록 조정했습니다.
 
 ## 라우트 맵
 
@@ -216,10 +240,12 @@ npm run preview
 | `/register` | 회원가입 |
 | `/posts` | 게시글 목록 |
 | `/posts/create` | 게시글 작성 |
+| `/posts/:id/edit` | 게시글 수정 |
 | `/posts/:id` | 게시글 상세 |
 | `/chat` | 채팅 |
 | `/notifications` | 알림 목록 |
 | `/mypage` | 마이페이지 |
+| `/mypage/blog-customize` | 블로그 꾸미기 |
 | `/403` | 권한 없음 |
 | `/change-password` | 비밀번호 변경 필요 안내 |
 | `/admin/dashboard` | 관리자 대시보드 |
