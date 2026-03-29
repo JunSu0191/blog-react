@@ -1,230 +1,395 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import PostList from "../components/PostList";
-import { useInfinitePosts, usePosts } from "../queries";
-import type { Post, PostsPageRequest } from "../api";
+import { Lock, LogIn, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { ActionDialog, Button, TagChip } from "@/shared/ui";
+import { useAuthContext } from "@/shared/context/useAuthContext";
 import { preloadCreateFlow } from "@/app/routePreload";
-import PostFeedHero from "../components/feed/PostFeedHero";
-import PostFeedControls from "../components/feed/PostFeedControls";
-import PostFeedPagination from "../components/feed/PostFeedPagination";
+import PostFeedListItem from "../components/feed/PostFeedListItem";
+import { useInfinitePostFeed, usePostFeed } from "../queries";
+import { resolvePostPath } from "../utils/postContent";
 
-type Category = "all" | "tech" | "daily" | "review";
-type ViewMode = "grid" | "list";
-type FeedMode = "infinite" | "pagination";
-
-const inferCategory = (post: Post): Exclude<Category, "all"> => {
-  const types: Array<Exclude<Category, "all">> = ["tech", "daily", "review"];
-  return types[(post.id + post.userId) % types.length];
-};
-
-const getReadMinutes = (content: string) => {
-  const plain = content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-  const charsPerMinute = 450;
-  return Math.max(1, Math.ceil(plain.length / charsPerMinute));
-};
+const PAGE_SIZE = 20;
 
 export default function PostListPage() {
-  const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
-  const [query, setQuery] = useState<PostsPageRequest>({ page: 0, size: 9 });
-  const [searchKeyword, setSearchKeyword] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<Category>("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
-  const [feedMode, setFeedMode] = useState<FeedMode>("infinite");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isMobile = useIsMobile();
+  const { user } = useAuthContext();
+  const isAuthenticated = Boolean(user);
+  const [searchParams] = useSearchParams();
+  const [page, setPage] = useState(0);
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const searchText = searchParams.get("q")?.trim() ?? "";
+  const currentPathWithSearchHash = `${location.pathname}${location.search}${location.hash}`;
 
-  const paginationPostsQuery = usePosts(query, {
-    enabled: feedMode === "pagination",
-  });
-  const infinitePostsQuery = useInfinitePosts(
+  const desktopFeedQuery = usePostFeed(
     {
-      size: query.size ?? 9,
-      keyword: query.keyword,
+      q: searchText.trim() || undefined,
+      page,
+      size: PAGE_SIZE,
     },
-    {
-      enabled: feedMode === "infinite",
-    },
+    { enabled: !isMobile },
   );
 
-  const sourcePosts = useMemo(() => {
-    if (feedMode === "infinite") {
-      const merged = (infinitePostsQuery.data?.pages || []).flatMap((page) => page.items);
-      const dedupedById = new Map<number, Post>();
-      merged.forEach((post) => {
-        dedupedById.set(post.id, post);
+  const mobileFeedQuery = useInfinitePostFeed(
+    {
+      q: searchText.trim() || undefined,
+      size: PAGE_SIZE,
+    },
+    { enabled: isMobile },
+  );
+
+  const posts = useMemo(() => {
+    if (isMobile) {
+      return mobileFeedQuery.data?.pages.flatMap((pageData) => pageData.content) ?? [];
+    }
+    return desktopFeedQuery.data?.content ?? [];
+  }, [desktopFeedQuery.data?.content, isMobile, mobileFeedQuery.data?.pages]);
+
+  const mobilePages = mobileFeedQuery.data?.pages ?? [];
+  const activePageInfo = isMobile
+    ? mobilePages[mobilePages.length - 1]
+    : desktopFeedQuery.data;
+
+  const totalPages = activePageInfo?.totalPages || 1;
+  const totalElements = activePageInfo?.totalElements || posts.length;
+  const canMovePrev = page > 0;
+  const canMoveNext = page + 1 < totalPages;
+
+  const isLoading = isMobile ? mobileFeedQuery.isLoading : desktopFeedQuery.isLoading;
+  const activeError = isMobile ? mobileFeedQuery.error : desktopFeedQuery.error;
+  const refetchFeed = isMobile
+    ? () => mobileFeedQuery.refetch()
+    : () => desktopFeedQuery.refetch();
+
+  const popularPosts = useMemo(
+    () =>
+      [...posts]
+        .sort((a, b) => {
+          if (b.viewCount !== a.viewCount) return b.viewCount - a.viewCount;
+          return b.likeCount - a.likeCount;
+        })
+        .slice(0, 5),
+    [posts],
+  );
+
+  const hotTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    posts.forEach((post) => {
+      post.tags.forEach((tag) => {
+        const normalized = tag.name.trim();
+        if (!normalized) return;
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
       });
-      return Array.from(dedupedById.values());
-    }
-    return paginationPostsQuery.data?.content || [];
-  }, [feedMode, infinitePostsQuery.data?.pages, paginationPostsQuery.data?.content]);
-
-  const filteredPosts = useMemo(() => {
-    return sourcePosts.filter((post) => {
-      if (selectedCategory === "all") return true;
-      return inferCategory(post) === selectedCategory;
     });
-  }, [sourcePosts, selectedCategory]);
-
-  const stats = useMemo(() => {
-    const totalReadMinutes = sourcePosts.reduce(
-      (acc, post) => acc + getReadMinutes(post.content || ""),
-      0,
-    );
-    const totalElements =
-      feedMode === "pagination"
-        ? paginationPostsQuery.data?.totalElements
-        : infinitePostsQuery.data?.pages?.[0]?.totalElements;
-
-    return {
-      totalPosts: totalElements ?? sourcePosts.length,
-      visiblePosts: filteredPosts.length,
-      contributors: new Set(sourcePosts.map((post) => post.userId)).size,
-      totalReadMinutes,
-      attachments: sourcePosts.filter((post) => (post.attachFiles?.length || 0) > 0).length,
-    };
-  }, [
-    feedMode,
-    filteredPosts.length,
-    infinitePostsQuery.data?.pages,
-    paginationPostsQuery.data?.totalElements,
-    sourcePosts,
-  ]);
-
-  const handleSearch = () => {
-    setQuery((prev) => ({
-      ...prev,
-      page: 0,
-      keyword: searchKeyword.trim() || undefined,
-    }));
-  };
-
-  const clearSearch = () => {
-    setSearchKeyword("");
-    setQuery((prev) => ({
-      ...prev,
-      page: 0,
-      keyword: undefined,
-    }));
-  };
-
-  const changePage = (nextPage: number) => {
-    setQuery((prev) => ({ ...prev, page: nextPage }));
-  };
-
-  const handleFeedModeChange = (mode: FeedMode) => {
-    setFeedMode(mode);
-    if (mode === "pagination") {
-      setQuery((prev) => ({ ...prev, page: 0 }));
-    }
-  };
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+  }, [posts]);
 
   useEffect(() => {
-    if (feedMode !== "infinite") return;
-    if (!infinitePostsQuery.hasNextPage || infinitePostsQuery.isFetchingNextPage) return;
+    setPage(0);
+  }, [searchText]);
 
-    const target = loadMoreTriggerRef.current;
+  useEffect(() => {
+    if (!isMobile) return;
+    const target = loadMoreRef.current;
     if (!target) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
-          void infinitePostsQuery.fetchNextPage();
-        }
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        if (!mobileFeedQuery.hasNextPage || mobileFeedQuery.isFetchingNextPage) return;
+        void mobileFeedQuery.fetchNextPage();
       },
-      { rootMargin: "280px 0px" },
+      { rootMargin: "220px 0px" },
     );
 
     observer.observe(target);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+    };
   }, [
-    feedMode,
-    infinitePostsQuery.fetchNextPage,
-    infinitePostsQuery.hasNextPage,
-    infinitePostsQuery.isFetchingNextPage,
+    isMobile,
+    mobileFeedQuery.fetchNextPage,
+    mobileFeedQuery.hasNextPage,
+    mobileFeedQuery.isFetchingNextPage,
   ]);
 
-  const isLoading =
-    feedMode === "infinite" ? infinitePostsQuery.isLoading : paginationPostsQuery.isLoading;
-  const error = feedMode === "infinite" ? infinitePostsQuery.error : paginationPostsQuery.error;
+  const feedRowHoverClass =
+    "group/post transition-all duration-200 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-400/60 hover:bg-blue-50/80 hover:shadow-sm dark:hover:bg-blue-950/20";
 
-  if (isLoading) {
-    return (
-      <div className="route-enter flex min-h-[60vh] flex-col items-center justify-center gap-4">
-        <div className="h-14 w-14 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
-        <p className="text-base font-semibold text-slate-600">피드를 불러오는 중...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="route-enter rounded-3xl border border-rose-200 bg-rose-50 p-8 text-center">
-        <h2 className="text-xl font-black text-rose-700">피드 로딩 실패</h2>
-        <p className="mt-2 text-sm text-rose-600">{error.message}</p>
-      </div>
-    );
-  }
+  const handleClickCreate = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (isAuthenticated) return;
+    event.preventDefault();
+    setIsLoginDialogOpen(true);
+  };
 
   return (
-    <div className="route-enter space-y-6">
-      <PostFeedHero stats={stats} onPrefetchCreate={() => void preloadCreateFlow()} />
-
-      <PostFeedControls
-        searchKeyword={searchKeyword}
-        activeKeyword={query.keyword}
-        onSearchKeywordChange={setSearchKeyword}
-        onSearch={handleSearch}
-        onClearSearch={clearSearch}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        feedMode={feedMode}
-        onFeedModeChange={handleFeedModeChange}
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
-      />
-
-      <PostList posts={filteredPosts} viewMode={viewMode} />
-
-      {feedMode === "pagination" &&
-        paginationPostsQuery.data &&
-        paginationPostsQuery.data.totalPages > 1 && (
-        <PostFeedPagination
-          totalElements={paginationPostsQuery.data.totalElements}
-          pageNumber={paginationPostsQuery.data.pageNumber}
-          pageSize={paginationPostsQuery.data.pageSize}
-          totalPages={paginationPostsQuery.data.totalPages}
-          first={paginationPostsQuery.data.first}
-          last={paginationPostsQuery.data.last}
-          onPageChange={changePage}
-        />
-      )}
-
-      {feedMode === "infinite" && (
-        <div className="space-y-3">
-          <div ref={loadMoreTriggerRef} className="h-2" />
-
-          {infinitePostsQuery.isFetchingNextPage && (
-            <p className="text-center text-sm font-semibold text-slate-500">
-              게시글을 더 불러오는 중...
+    <div className="route-enter space-y-6 pt-2 font-sans sm:pt-0">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+              ARTICLE INDEX
             </p>
-          )}
-
-          {!infinitePostsQuery.isFetchingNextPage && infinitePostsQuery.hasNextPage && (
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => void infinitePostsQuery.fetchNextPage()}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
+              모든 글 탐색
+            </h1>
+            <p className="mt-3 max-w-3xl text-sm text-slate-600 dark:text-slate-400 sm:text-base">
+              검색과 목록 중심으로 탐색하는 페이지입니다. 추천과 발견은 홈에서, 깊은 탐색은 여기서 이어집니다.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <Link
+                to="/home"
+                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20 dark:hover:text-blue-300"
               >
-                더 보기
-              </button>
+                홈으로 이동
+              </Link>
+              {searchText ? (
+                <span className="rounded-full bg-blue-50 px-2.5 py-1 font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                  검색어: {searchText}
+                </span>
+              ) : (
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  최신 글부터 탐색
+                </span>
+              )}
             </div>
+          </div>
+
+          <Link
+            to="/posts/create"
+            onClick={handleClickCreate}
+            onMouseEnter={() => {
+              void preloadCreateFlow();
+            }}
+            onFocus={() => {
+              void preloadCreateFlow();
+            }}
+          >
+            <Button className="rounded-lg">글 작성</Button>
+          </Link>
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="space-y-4">
+          <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900 sm:px-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                총 <span className="font-semibold">{totalElements.toLocaleString()}</span>개 글
+              </p>
+              {isMobile ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  노출 {posts.length.toLocaleString()} / {totalElements.toLocaleString()}
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  페이지 {page + 1} / {totalPages}
+                </p>
+              )}
+            </div>
+          </section>
+
+          {isLoading ? (
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+              <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <article
+                    key={`post-skeleton-${index}`}
+                    className="grid gap-4 p-4 sm:grid-cols-[1fr_230px] sm:p-5"
+                  >
+                    <div className="space-y-3">
+                      <div className="h-3 w-28 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div className="h-5 w-2/3 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div className="h-4 w-full animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                      <div className="h-4 w-2/3 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                    </div>
+                    <div className="h-28 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700 sm:h-28" />
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : activeError ? (
+            <section className="overflow-hidden rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center dark:border-rose-900/60 dark:bg-rose-950/30">
+              <h2 className="text-lg font-bold text-rose-700 dark:text-rose-200">
+                글 목록을 불러오지 못했습니다.
+              </h2>
+              <p className="mt-2 text-sm text-rose-600 dark:text-rose-300">
+                {activeError.message}
+              </p>
+              <Button
+                type="button"
+                className="mt-4"
+                onClick={() => {
+                  void refetchFeed();
+                }}
+              >
+                다시 시도
+              </Button>
+            </section>
+          ) : posts.length === 0 ? (
+            <section className="overflow-hidden rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-700 dark:bg-slate-900">
+              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                {searchText ? "검색 결과가 없습니다." : "아직 게시글이 없습니다."}
+              </h2>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                {searchText
+                  ? "검색어를 조정해 주세요."
+                  : "첫 게시글을 작성해 피드를 채워보세요."}
+              </p>
+            </section>
+          ) : (
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+              <div className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+                {posts.map((post) => (
+                  <PostFeedListItem
+                    key={post.id}
+                    post={post}
+                    destination={resolvePostPath(post.id)}
+                    className={feedRowHoverClass}
+                  />
+                ))}
+              </div>
+            </section>
           )}
 
-          {!infinitePostsQuery.hasNextPage && filteredPosts.length > 0 && (
-            <p className="text-center text-xs font-semibold text-slate-400">
-              모든 게시글을 불러왔습니다.
-            </p>
-          )}
+          {isMobile && posts.length > 0 ? (
+            <div ref={loadMoreRef} className="py-3 text-center">
+              {mobileFeedQuery.isFetchingNextPage ? (
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  게시글을 더 불러오는 중...
+                </p>
+              ) : mobileFeedQuery.hasNextPage ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  아래로 스크롤하면 다음 글을 불러옵니다.
+                </p>
+              ) : (
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  마지막 게시글까지 확인했습니다.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {!isMobile ? (
+            <section className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900 sm:px-5">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                페이지 {page + 1} / {totalPages}
+              </p>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canMovePrev}
+                  onClick={() => {
+                    if (!canMovePrev) return;
+                    setPage((prev) => prev - 1);
+                  }}
+                >
+                  이전
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!canMoveNext}
+                  onClick={() => {
+                    if (!canMoveNext) return;
+                    setPage((prev) => prev + 1);
+                  }}
+                >
+                  다음
+                </Button>
+              </div>
+            </section>
+          ) : null}
         </div>
-      )}
+
+        <aside className="space-y-4 xl:sticky xl:top-24 xl:h-fit">
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                인기 글 TOP 5
+              </h2>
+              <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                조회수 기준
+              </span>
+            </div>
+
+            <div className="mt-3 space-y-2.5">
+              {popularPosts.length > 0 ? (
+                popularPosts.map((post, index) => (
+                  <Link
+                    key={post.id}
+                    to={resolvePostPath(post.id)}
+                    className="group block rounded-xl border border-slate-200 p-3 transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:hover:border-blue-900/70 dark:hover:bg-blue-950/30"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-100 px-1 text-[11px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="line-clamp-2 text-sm font-semibold text-slate-800 transition group-hover:text-blue-700 dark:text-slate-100 dark:group-hover:text-blue-300">
+                          {post.title}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          조회 {post.viewCount.toLocaleString()} · 좋아요{" "}
+                          {post.likeCount.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <p className="rounded-xl border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  목록을 불러오면 인기 글이 표시됩니다.
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              인기 태그
+            </h3>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {hotTags.length > 0 ? (
+                hotTags.map(([name, count]) => (
+                    <Link key={name} to={`/tags/${encodeURIComponent(name)}`}>
+                      <TagChip label={name} count={count} />
+                    </Link>
+                  ))
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  태그 데이터가 없습니다.
+                </p>
+              )}
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <ActionDialog
+        open={isLoginDialogOpen}
+        onOpenChange={setIsLoginDialogOpen}
+        icon={<Lock className="h-5 w-5" aria-hidden="true" />}
+        title="로그인이 필요합니다"
+        description="로그인 페이지로 이동하시겠습니까?"
+        cancelIcon={<X className="h-4 w-4" aria-hidden="true" />}
+        confirmIcon={<LogIn className="h-4 w-4" aria-hidden="true" />}
+        cancelText="나중에 로그인하기"
+        confirmText="로그인 페이지 이동"
+        onConfirm={() => {
+          navigate("/login", { state: currentPathWithSearchHash });
+        }}
+      />
     </div>
   );
 }

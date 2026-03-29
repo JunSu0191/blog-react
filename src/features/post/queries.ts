@@ -1,154 +1,317 @@
 import {
-  useQuery,
-  useMutation,
-  useQueryClient,
+  useQueries,
   useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
 } from "@tanstack/react-query";
-import type { ApiError } from "../../shared/lib/api";
+import type { ApiError } from "@/shared/lib/api";
 import {
-  getPosts,
-  getPostsByCursor,
-  getPost,
-  createPost,
-  updatePost,
-  deletePost,
-  getPostsByUser,
-  type Post,
-  type CreatePostRequest,
-  type UpdatePostRequest,
-  type CursorPostsPage,
-  type PageResponse,
-  type PostsCursorRequest,
-  type PostsPageRequest,
+  createDraftBySpec,
+  createPostBySpec,
+  createPostDraft,
+  createPostEntry,
+  deletePostEntry,
+  deletePostDraft,
+  fetchPostCategories,
+  fetchPostById,
+  fetchPosts,
+  fetchRelatedPosts,
+  getMyPagePostList,
+  getMyPostLikeStatus,
+  getPostDraft,
+  getPostDrafts,
+  likePost,
+  type PostLikeStatus,
+  unlikePost,
+  updateDraftBySpec,
+  updatePostBySpec,
+  updatePostDraft,
+  updatePostEntry,
 } from "./api";
+import type {
+  DraftDetail,
+  DraftSummary,
+  DraftWriteRequest,
+  PagedResponse,
+  PostCategoryOption,
+  PostDetail,
+  PostListItem,
+  PostListQuery,
+  PostPublishRequest,
+  PostSummary,
+  PostUpdateRequest,
+  PostWriteRequest,
+} from "./types/api";
 
 type QueryOptions = {
   enabled?: boolean;
 };
 
-/**
- * 모든 게시글 목록을 가져오는 쿼리 훅 (페이지네이션 지원)
- * - TanStack Query의 useQuery를 사용하여 서버 데이터를 캐싱하고 관리
- * - 자동으로 로딩 상태, 에러 상태, 데이터 리패칭 등을 처리
- * - queryKey: ["posts", params] - 파라미터별로 캐시를 분리
- * - queryFn: getPosts - 데이터를 가져오는 함수
- * @param params 페이지네이션 및 검색 파라미터
- * @returns { data: PageResponse<Post>, isLoading: boolean, error: ApiError | null, ... }
- */
-export function usePosts(params?: PostsPageRequest, options?: QueryOptions) {
-  return useQuery<PageResponse<Post>, ApiError>({
-    queryKey: ["posts", params],
-    queryFn: () => getPosts(params),
+export function usePostFeed(params?: PostListQuery, options?: QueryOptions) {
+  return useQuery<PagedResponse<PostSummary>, ApiError>({
+    queryKey: ["posts", "feed", params],
+    queryFn: () => fetchPosts(params),
     enabled: options?.enabled ?? true,
   });
 }
 
-export function useInfinitePosts(
-  params?: Omit<PostsCursorRequest, "cursorId">,
+type InfinitePostFeedParams = Omit<PostListQuery, "page" | "size"> & {
+  size?: number;
+};
+
+export function useInfinitePostFeed(
+  params?: InfinitePostFeedParams,
   options?: QueryOptions,
 ) {
-  return useInfiniteQuery<CursorPostsPage, ApiError>({
-    queryKey: ["posts", "infinite", params],
+  const pageSize = params?.size ?? 20;
+
+  return useInfiniteQuery<PagedResponse<PostSummary>, ApiError>({
+    queryKey: ["posts", "feed", "infinite", params],
     queryFn: ({ pageParam }) =>
-      getPostsByCursor({
+      fetchPosts({
         ...params,
-        cursorId: typeof pageParam === "number" ? pageParam : undefined,
+        page: typeof pageParam === "number" ? pageParam : 0,
+        size: pageSize,
       }),
-    initialPageParam: undefined as number | undefined,
-    getNextPageParam: (lastPage, allPages) => {
-      if (!lastPage.hasMore) return undefined;
-      const nextCursorId = lastPage.nextCursorId;
-      if (typeof nextCursorId !== "number") return undefined;
+    enabled: options?.enabled ?? true,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) =>
+      lastPage.last ? undefined : lastPage.pageNumber + 1,
+  });
+}
 
-      const duplicatedCursor = allPages
-        .slice(0, -1)
-        .some((page) => page.nextCursorId === nextCursorId);
-      if (duplicatedCursor) return undefined;
-
-      return nextCursorId;
-    },
+export function usePostCategories(options?: QueryOptions) {
+  return useQuery<PostCategoryOption[], ApiError>({
+    queryKey: ["posts", "categories"],
+    queryFn: () => fetchPostCategories(),
     enabled: options?.enabled ?? true,
   });
 }
 
-/**
- * 특정 ID의 게시글을 가져오는 쿼리 훅
- * - ID가 제공될 때만 쿼리를 실행 (enabled: !!id)
- * - queryKey: ["posts", id] - ID별로 캐시를 분리
- * @param id 게시글 ID
- * @returns { data: Post | undefined, isLoading: boolean, error: ApiError | null, ... }
- */
-export function usePost(id: number) {
-  return useQuery<Post, ApiError>({
-    queryKey: ["posts", id],
-    queryFn: () => getPost(id),
-    enabled: !!id, // id가 존재할 때만 쿼리 실행
+export function usePostDetail(postId: number, options?: QueryOptions) {
+  return useQuery<PostDetail, ApiError>({
+    queryKey: ["posts", "detail", postId],
+    queryFn: () => fetchPostById(postId),
+    enabled: (options?.enabled ?? true) && Number.isFinite(postId) && postId > 0,
   });
 }
 
-/**
- * 특정 사용자의 게시글 목록을 가져오는 쿼리 훅
- * - userId가 제공될 때만 쿼리를 실행
- * - queryKey: ["posts", "user", userId] - 사용자별 캐시 분리
- * @param userId 사용자 ID
- * @returns { data: Post[], isLoading: boolean, error: ApiError | null, ... }
- */
-export function usePostsByUser(userId: number) {
-  return useQuery<Post[], ApiError>({
-    queryKey: ["posts", "user", userId],
-    queryFn: () => getPostsByUser(userId),
-    enabled: !!userId,
+export function useBookmarkedPosts(postIds: number[]) {
+  const normalizedPostIds = [...new Set(postIds)].filter(
+    (postId) => Number.isFinite(postId) && postId > 0,
+  );
+
+  const queries = useQueries({
+    queries: normalizedPostIds.map((postId) => ({
+      queryKey: ["posts", "detail", postId],
+      queryFn: () => fetchPostById(postId),
+      enabled: true,
+    })),
+  });
+
+  return {
+    items: queries
+      .map((query) => query.data)
+      .filter((item): item is PostDetail => Boolean(item)),
+    isLoading: queries.some((query) => query.isLoading),
+    isError: queries.some((query) => query.isError),
+  };
+}
+
+export function useRelatedPosts(postId: number, limit = 5, options?: QueryOptions) {
+  return useQuery<PostSummary[], ApiError>({
+    queryKey: ["posts", "related", postId, limit],
+    queryFn: () => fetchRelatedPosts(postId, limit),
+    enabled: (options?.enabled ?? true) && Number.isFinite(postId) && postId > 0,
   });
 }
 
-/**
- * 새 게시글을 생성하는 뮤테이션 훅
- * - TanStack Query의 useMutation을 사용하여 서버 데이터 변경 작업 처리
- * - 성공 시 모든 게시글 쿼리를 무효화하여 최신 데이터로 업데이트
- * - mutationFn: createPost - 데이터를 변경하는 함수
- * - onSuccess: 성공 콜백에서 캐시 무효화
- * @returns { mutate: (req: CreatePostRequest) => void, isPending: boolean, error: ApiError | null, ... }
- */
-export function useCreatePost() {
-  const queryClient = useQueryClient(); // 쿼리 클라이언트로 캐시 관리
-  return useMutation<Post, ApiError, CreatePostRequest>({
-    mutationFn: createPost,
-    onSuccess: () => {
-      // 성공 시 게시글 목록 캐시 무효화 (자동 리패칭)
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
-    },
+export function usePostDrafts(options?: QueryOptions) {
+  return useQuery<DraftSummary[], ApiError>({
+    queryKey: ["posts", "drafts"],
+    queryFn: () => getPostDrafts(),
+    enabled: options?.enabled ?? true,
   });
 }
 
-/**
- * 게시글을 수정하는 뮤테이션 훅
- * - 성공 시 관련 쿼리들을 무효화하여 캐시 업데이트
- * - invalidateQueries로 전체 목록과 특정 게시글 캐시를 무효화
- * @returns { mutate: ({ id, req }: { id: number; req: UpdatePostRequest }) => void, isPending: boolean, error: ApiError | null, ... }
- */
-export function useUpdatePost() {
+export function usePostDraft(draftId?: number, options?: QueryOptions) {
+  return useQuery<DraftDetail, ApiError>({
+    queryKey: ["posts", "drafts", draftId],
+    queryFn: () => getPostDraft(draftId as number),
+    enabled: (options?.enabled ?? true) && typeof draftId === "number",
+  });
+}
+
+export function useSavePostDraft() {
   const queryClient = useQueryClient();
-  return useMutation<Post, ApiError, { id: number; req: UpdatePostRequest }>({
-    mutationFn: ({ id, req }) => updatePost(id, req),
+
+  return useMutation<
+    DraftDetail,
+    ApiError,
+    { draftId?: number; request: PostPublishRequest }
+  >({
+    mutationFn: ({ draftId, request }) => {
+      const payload = {
+        title: request.title,
+        subtitle: request.subtitle,
+        category: request.category,
+        tags: request.tags,
+        thumbnailUrl: request.thumbnailUrl,
+        contentJson: request.contentJson,
+        contentHtml: request.contentHtml,
+      };
+
+      if (typeof draftId === "number") {
+        return updatePostDraft(draftId, payload);
+      }
+      return createPostDraft(payload);
+    },
     onSuccess: (data) => {
-      // 성공 시 목록과 수정된 게시글 캐시 무효화
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
-      queryClient.invalidateQueries({ queryKey: ["posts", data.id] });
+      queryClient.invalidateQueries({ queryKey: ["posts", "drafts"] });
+      queryClient.setQueryData(["posts", "drafts", data.id], data);
     },
   });
 }
 
-/**
- * 게시글을 삭제하는 뮤테이션 훅
- * - 성공 시 게시글 목록 캐시 무효화
- * @returns { mutate: (id: number) => void, isPending: boolean, error: ApiError | null, ... }
- */
+export function useDeletePostDraft() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, ApiError, number>({
+    mutationFn: (draftId) => deletePostDraft(draftId),
+    onSuccess: (_data, draftId) => {
+      queryClient.invalidateQueries({ queryKey: ["posts", "drafts"] });
+      queryClient.removeQueries({ queryKey: ["posts", "drafts", draftId] });
+    },
+  });
+}
+
+export function usePublishPost() {
+  const queryClient = useQueryClient();
+
+  return useMutation<PostDetail, ApiError, PostPublishRequest>({
+    mutationFn: (request) => createPostEntry(request),
+    onSuccess: (createdPost) => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.setQueryData(["posts", "detail", createdPost.id], createdPost);
+    },
+  });
+}
+
+export function usePatchPost() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    PostDetail,
+    ApiError,
+    { postId: number; request: PostUpdateRequest }
+  >({
+    mutationFn: ({ postId, request }) => updatePostEntry(postId, request),
+    onSuccess: (updatedPost) => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.setQueryData(["posts", "detail", updatedPost.id], updatedPost);
+    },
+  });
+}
+
+export function usePublishPostBySpec() {
+  const queryClient = useQueryClient();
+
+  return useMutation<PostDetail, ApiError, PostWriteRequest>({
+    mutationFn: (request) => createPostBySpec(request),
+    onSuccess: (createdPost) => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.setQueryData(["posts", "detail", createdPost.id], createdPost);
+    },
+  });
+}
+
+export function usePatchPostBySpec() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    PostDetail,
+    ApiError,
+    { postId: number; request: PostWriteRequest }
+  >({
+    mutationFn: ({ postId, request }) => updatePostBySpec(postId, request),
+    onSuccess: (updatedPost) => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.setQueryData(["posts", "detail", updatedPost.id], updatedPost);
+    },
+  });
+}
+
 export function useDeletePost() {
   const queryClient = useQueryClient();
+
   return useMutation<void, ApiError, number>({
-    mutationFn: deletePost,
-    onSuccess: () => {
+    mutationFn: (postId) => deletePostEntry(postId),
+    onSuccess: (_data, postId) => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.removeQueries({ queryKey: ["posts", "detail", postId] });
+      queryClient.removeQueries({ queryKey: ["posts", "related", postId] });
+    },
+  });
+}
+
+export function useSavePostDraftBySpec() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    DraftDetail,
+    ApiError,
+    { draftId?: number; request: DraftWriteRequest }
+  >({
+    mutationFn: ({ draftId, request }) => {
+      if (typeof draftId === "number") {
+        return updateDraftBySpec(draftId, request);
+      }
+      return createDraftBySpec(request);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["posts", "drafts"] });
+      queryClient.setQueryData(["posts", "drafts", data.id], data);
+    },
+  });
+}
+
+export function useMyPagePostList(options?: QueryOptions) {
+  return useQuery<PostListItem[], ApiError>({
+    queryKey: ["posts", "mypage"],
+    queryFn: () => getMyPagePostList(),
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useMyPostLikeStatus(postId?: number, options?: QueryOptions) {
+  return useQuery<PostLikeStatus, ApiError>({
+    queryKey: ["posts", "likes", "me", postId],
+    queryFn: () => getMyPostLikeStatus(postId as number),
+    enabled: (options?.enabled ?? true) && typeof postId === "number",
+  });
+}
+
+export function useLikePost() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, ApiError, number>({
+    mutationFn: (postId) => likePost(postId),
+    onSuccess: (_data, postId) => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["posts", "likes", "me", postId] });
+    },
+  });
+}
+
+export function useUnlikePost() {
+  const queryClient = useQueryClient();
+
+  return useMutation<void, ApiError, number>({
+    mutationFn: (postId) => unlikePost(postId),
+    onSuccess: (_data, postId) => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["posts", "likes", "me", postId] });
     },
   });
 }
