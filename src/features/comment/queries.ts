@@ -22,11 +22,19 @@ type DeleteCommentVariables = {
 
 const commentsQueryKey = (postId: number) => ["comments", postId] as const;
 
+type UseCommentsOptions = {
+  enabled?: boolean;
+};
+
 // 댓글 목록 조회
-export function useComments(postId: number) {
+export function useComments(postId: number, options?: UseCommentsOptions) {
   return useQuery({
     queryKey: commentsQueryKey(postId),
     queryFn: () => getComments(postId),
+    enabled:
+      Number.isFinite(postId) &&
+      postId > 0 &&
+      (options?.enabled ?? true),
   });
 }
 

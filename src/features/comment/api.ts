@@ -11,6 +11,7 @@ export interface Comment {
 
 export interface CommentCreateRequest {
   postId: number;
+  parentId?: number;
   content: string;
 }
 
@@ -23,6 +24,7 @@ export interface CommentResponse {
   postId: number;
   userId: number;
   name: string;
+  username?: string;
   parentId: number | null;
   content: string;
   createdAt: string;
@@ -31,7 +33,7 @@ export interface CommentResponse {
   likeCount: number;
   dislikeCount: number;
   myReaction: "LIKE" | "DISLIKE" | "NONE" | null;
-  replies: any[];
+  replies: CommentResponse[];
 }
 
 const BASE = API_BASE_URL;
@@ -53,6 +55,10 @@ function normalizeCommentResponse(raw: unknown): CommentResponse {
     }
   }
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const nestedUser =
+    obj.user && typeof obj.user === "object"
+      ? (obj.user as Record<string, unknown>)
+      : null;
   const rawReaction = typeof obj.myReaction === "string" ? obj.myReaction.toUpperCase() : null;
   const myReaction =
     rawReaction === "LIKE" || rawReaction === "DISLIKE" || rawReaction === "NONE"
@@ -63,7 +69,28 @@ function normalizeCommentResponse(raw: unknown): CommentResponse {
     id: toFiniteNumber(obj.id) ?? 0,
     postId: toFiniteNumber(obj.postId) ?? 0,
     userId: toFiniteNumber(obj.userId) ?? 0,
-    name: typeof obj.name === "string" ? obj.name : "익명",
+    name:
+      typeof obj.name === "string"
+        ? obj.name
+        : typeof obj.nickname === "string"
+          ? obj.nickname
+          : typeof obj.username === "string"
+            ? obj.username
+            : typeof nestedUser?.name === "string"
+              ? nestedUser.name
+              : typeof nestedUser?.nickname === "string"
+                ? nestedUser.nickname
+                : typeof nestedUser?.username === "string"
+                  ? nestedUser.username
+                  : "익명",
+    username:
+      typeof obj.username === "string"
+        ? obj.username
+        : typeof obj.userName === "string"
+          ? obj.userName
+          : typeof nestedUser?.username === "string"
+            ? nestedUser.username
+            : undefined,
     parentId:
       typeof toFiniteNumber(obj.parentId) === "number"
         ? (toFiniteNumber(obj.parentId) as number)
@@ -91,7 +118,9 @@ function normalizeCommentResponse(raw: unknown): CommentResponse {
         ? Math.max(0, Math.floor(obj.dislikeCount))
         : 0,
     myReaction,
-    replies: Array.isArray(obj.replies) ? obj.replies : [],
+    replies: Array.isArray(obj.replies)
+      ? obj.replies.map((item) => normalizeCommentResponse(item))
+      : [],
   };
 }
 
