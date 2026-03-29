@@ -20,12 +20,32 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
 
+          if (id.includes("/@sentry/")) {
+            return "monitoring";
+          }
+
           if (
             id.includes("/@tiptap/") ||
             id.includes("/prosemirror-") ||
             id.includes("/orderedmap/")
           ) {
             return "editor";
+          }
+
+          if (
+            id.includes("/recharts/") ||
+            id.includes("/d3-") ||
+            id.includes("/internmap/")
+          ) {
+            return "charts";
+          }
+
+          if (
+            id.includes("/@radix-ui/") ||
+            id.includes("/cmdk/") ||
+            id.includes("/vaul/")
+          ) {
+            return "ui-kit";
           }
 
           if (
@@ -50,6 +70,10 @@ export default defineConfig({
 
           if (id.includes("/tus-js-client/")) {
             return "upload";
+          }
+
+          if (id.includes("/lucide-react/")) {
+            return "icons";
           }
 
           return "vendor";

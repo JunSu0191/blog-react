@@ -1,705 +1,1196 @@
 import {
-  lazy,
   Suspense,
   useCallback,
   useEffect,
+  lazy,
   useMemo,
+  useRef,
   useState,
+  type ChangeEvent,
 } from "react";
-import type { ChangeEvent, FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { useCreatePost } from "../queries";
-import { ActionDialog, Button, Input } from "@/shared/ui";
-import useActionDialog from "@/shared/hooks/useActionDialog";
-import { uploadImageWithTus } from "../tusUpload";
-import { getToken } from "@/shared/lib/auth";
-import { API_BASE_URL } from "@/shared/lib/api";
-import { toApiAbsoluteUrl } from "@/shared/lib/networkRuntime";
+import { createPortal } from "react-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Button, Input, Select } from "@/shared/ui";
+import { useToast } from "@/shared/ui/ToastProvider";
+import HashtagInput from "../components/HashtagInput";
+import { getPostDraft, uploadPostImage } from "../api";
+import {
+  useDeletePostDraft,
+  usePatchPost,
+  usePostCategories,
+  usePostDetail,
+  usePostDrafts,
+  usePublishPost,
+  useSavePostDraft,
+} from "../queries";
+import { ComposeMode } from "../types/enums";
+import type { ComposeMode as ComposeModeType } from "../types/enums";
+import type { PostComposerFormValues } from "../types/form";
+import {
+  parseTagText,
+  resolvePostPath,
+  sanitizeHtml,
+  stripHtml,
+  stringifyTags,
+} from "../utils/postContent";
 
-const RichTextEditor = lazy(() => import("@/shared/ui/RichTextEditor"));
+const ThumbnailMode = {
+  AUTO_FROM_CONTENT: "auto_from_content",
+  MANUAL_UPLOAD: "manual_upload",
+} as const;
 
-type AttachmentUploadItem = {
-  id: string;
-  file: File;
-  progress: number;
-  status: "uploading" | "done" | "error";
-  url?: string;
-  downloadUrl?: string;
-  error?: string;
+type ThumbnailMode = (typeof ThumbnailMode)[keyof typeof ThumbnailMode];
+
+const INITIAL_FORM_VALUES: PostComposerFormValues = {
+  title: "",
+  subtitle: "",
+  category: "",
+  tagsText: "",
+  thumbnailUrl: "",
+  contentHtml: "",
+  contentJson: undefined,
 };
 
-type ComposeTab = "write" | "preview" | "attachments";
+const AUTOSAVE_DEBOUNCE_MS = 8000;
+const BlogEditor = lazy(() => import("../components/editor/BlogEditor"));
 
-const composeTabs: Array<{
-  key: ComposeTab;
-  label: string;
-  description: string;
-}> = [
-  { key: "write", label: "작성", description: "내용 작성" },
-  { key: "preview", label: "미리보기", description: "완성 화면" },
-  { key: "attachments", label: "첨부", description: "파일 첨부" },
-];
+function normalizeDisplayText(value: unknown) {
+  if (typeof value !== "string") return "";
 
-const escapeHtml = (value: string) =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+  const trimmed = value.trim();
+  if (!trimmed) return "";
 
-const toAbsoluteApiUrl = (rawUrl: string) => {
-  return toApiAbsoluteUrl(rawUrl, API_BASE_URL);
-};
+  const normalized = trimmed.toLocaleLowerCase();
+  if (normalized === "undefined" || normalized === "null") {
+    return "";
+  }
 
-const extractUploadId = (url: string) => {
-  const matched = url.match(/\/uploads\/([^/?#]+)/);
-  return matched?.[1];
-};
+  return trimmed;
+}
 
-const formatFileSize = (size: number) => {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(2)} MB`;
-};
+function extractFirstImageUrlFromHtml(html: string) {
+  if (!html.trim()) return "";
+  const matched = html.match(/<img[^>]*src=["']([^"']+)["'][^>]*>/i);
+  const raw = matched?.[1];
+  return typeof raw === "string" ? raw.trim() : "";
+}
 
-const stripHtml = (value: string) =>
-  value
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
+function normalizeTagToken(value: string) {
+  return value
+    .replace(/^#+/, "")
+    .replace(/[#,]+$/g, "")
+    .trim();
+}
+
+function tokenizeTagInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  return trimmed
+    .split(",")
+    .map(normalizeTagToken)
+    .filter((token) => token.length > 0);
+}
+
+function hasMeaningfulHtml(rawHtml: string) {
+  if (!rawHtml.trim()) return false;
+
+  const compact = rawHtml
+    .replace(/<p>\s*(<br\s*\/?>)?\s*<\/p>/gi, "")
+    .replace(/<br\s*\/?>/gi, "")
+    .replace(/\u00a0/g, " ")
     .trim();
 
-const buildAttachmentSectionHtml = (
-  attachments: AttachmentUploadItem[],
-  content: string,
-) => {
-  const candidates = attachments.filter(
-    (item) => item.status === "done" && (item.downloadUrl || item.url),
+  return compact.length > 0;
+}
+
+function toErrorMessage(error: unknown) {
+  const status = getErrorStatus(error);
+  if (status === 409) {
+    return "요청이 충돌했습니다. 잠시 후 다시 시도해 주세요.";
+  }
+
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const message =
+      typeof record.message === "string" ? record.message.trim() : "";
+    if (message.length > 0) {
+      if (/slugㅜ/i.test(message)) {
+        return "제목에 한글/영문/숫자를 1자 이상 포함해 주세요.";
+      }
+      return message;
+    }
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return "요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
+function normalizeTitleForPublish(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasSlugConvertibleChar(value: string) {
+  return /[a-zA-Z0-9가-힣]/.test(value);
+}
+
+function getErrorStatus(error: unknown) {
+  if (!error || typeof error !== "object") return undefined;
+  const record = error as Record<string, unknown>;
+  const status = record.status;
+  if (typeof status === "number" && Number.isFinite(status)) return status;
+  if (typeof status === "string") {
+    const parsed = Number(status);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function EditorLoader() {
+  return (
+    <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60">
+      <div className="flex items-center gap-3 text-sm font-medium text-slate-500 dark:text-slate-400">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-100 border-t-blue-600" />
+        에디터 준비 중...
+      </div>
+    </div>
   );
-  const missing = candidates.filter((item) => {
-    const link = item.downloadUrl || item.url || "";
-    return link && !content.includes(link);
-  });
-
-  if (missing.length === 0) return "";
-
-  const links = missing
-    .map((item) => {
-      const href = item.downloadUrl || item.url || "";
-      return `<li><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.file.name)}</a></li>`;
-    })
-    .join("");
-
-  return `<hr/><h3>첨부 파일</h3><ul>${links}</ul>`;
-};
+}
 
 export default function CreatePostPage() {
+  const params = useParams<{ postId?: string }>();
   const navigate = useNavigate();
-  const createPostMutation = useCreatePost();
-  const [activeTab, setActiveTab] = useState<ComposeTab>("write");
-  const [attachments, setAttachments] = useState<AttachmentUploadItem[]>([]);
-  const noticeDialog = useActionDialog({ defaultTitle: "안내" });
-  const [formData, setFormData] = useState({
-    title: "",
-    content: "",
+  const { success, error: showError } = useToast();
+  const rawPostId = Number(params.postId);
+  const editingPostId =
+    Number.isFinite(rawPostId) && rawPostId > 0 ? rawPostId : undefined;
+  const isEditMode = typeof editingPostId === "number";
+
+  const [formValues, setFormValues] =
+    useState<PostComposerFormValues>(INITIAL_FORM_VALUES);
+  const [composeMode, setComposeMode] = useState<ComposeModeType>(
+    ComposeMode.WRITE,
+  );
+  const [thumbnailMode, setThumbnailMode] = useState<ThumbnailMode>(
+    ThumbnailMode.AUTO_FROM_CONTENT,
+  );
+  const [activeDraftId, setActiveDraftId] = useState<number | undefined>(
+    undefined,
+  );
+  const [lastSavedAt, setLastSavedAt] = useState<string | undefined>(undefined);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+  const [isFocusComposeOpen, setIsFocusComposeOpen] = useState(false);
+  const [tagInputValue, setTagInputValue] = useState("");
+
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
+  const latestSavedFingerprintRef = useRef<string>("");
+  const editInitialFingerprintRef = useRef<string>("");
+  const autosaveTimerRef = useRef<number | null>(null);
+  const initializedEditPostIdRef = useRef<number | null>(null);
+
+  const categoriesQuery = usePostCategories();
+  const editTargetQuery = usePostDetail(editingPostId ?? 0, {
+    enabled: isEditMode,
   });
+  const draftsQuery = usePostDrafts();
+  const saveDraftMutation = useSavePostDraft();
+  const deleteDraftMutation = useDeletePostDraft();
+  const publishMutation = usePublishPost();
+  const patchMutation = usePatchPost();
 
-  const setAttachmentPatch = useCallback(
-    (id: string, patch: Partial<AttachmentUploadItem>) => {
-      setAttachments((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-      );
-    },
-    [],
+  const draftItems = draftsQuery.data || [];
+  const parsedTags = useMemo(
+    () => parseTagText(formValues.tagsText),
+    [formValues.tagsText],
+  );
+  const plainText = useMemo(
+    () => stripHtml(formValues.contentHtml),
+    [formValues.contentHtml],
+  );
+  const hasBodyContent = useMemo(
+    () => plainText.trim().length > 0 || hasMeaningfulHtml(formValues.contentHtml),
+    [formValues.contentHtml, plainText],
+  );
+  const safePreviewHtml = useMemo(
+    () => sanitizeHtml(formValues.contentHtml),
+    [formValues.contentHtml],
   );
 
-  const processContentImages = useCallback(
-    async (content: string, headers: Record<string, string>) => {
-      const imgRegex = /<img[^>]+src="data:image\/[^;]+;base64,([^"]+)"[^>]*>/g;
-      const replacements: { oldSrc: string; newSrc: Promise<string> }[] = [];
-
-      let match;
-      while ((match = imgRegex.exec(content)) !== null) {
-        const base64Data = match[1];
-        const mimeType = match[0].match(/data:image\/([^;]+)/)?.[1];
-        if (!mimeType || !base64Data) continue;
-
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-
-        const blob = new Blob([new Uint8Array(byteNumbers)], {
-          type: `image/${mimeType}`,
-        });
-        const file = new File([blob], `image.${mimeType}`, {
-          type: `image/${mimeType}`,
-        });
-
-        replacements.push({
-          oldSrc: match[0],
-          newSrc: uploadImageWithTus(file, { headers }),
-        });
-      }
-
-      const urls = await Promise.all(
-        replacements.map((replacement) => replacement.newSrc),
-      );
-
-      let processedContent = content;
-      replacements.forEach((replacement, index) => {
-        const absoluteUrl = toAbsoluteApiUrl(urls[index]);
-        const newImgTag = replacement.oldSrc.replace(
-          /src="data:image\/[^;]+;base64,[^"]+"/,
-          `src="${absoluteUrl}"`,
-        );
-        processedContent = processedContent.replace(
-          replacement.oldSrc,
-          newImgTag,
-        );
-      });
-
-      return processedContent;
-    },
-    [],
+  const firstImageThumbnailUrl = useMemo(
+    () => extractFirstImageUrlFromHtml(formValues.contentHtml),
+    [formValues.contentHtml],
   );
 
-  const uploadAttachmentFile = useCallback(
-    async (file: File) => {
-      const id = `${file.name}-${file.size}-${file.lastModified}`;
-      if (attachments.some((item) => item.id === id)) return;
+  const effectiveThumbnailUrl = useMemo(() => {
+    if (thumbnailMode === ThumbnailMode.MANUAL_UPLOAD) {
+      return formValues.thumbnailUrl.trim();
+    }
+    return firstImageThumbnailUrl;
+  }, [firstImageThumbnailUrl, formValues.thumbnailUrl, thumbnailMode]);
 
-      setAttachments((prev) => [
-        ...prev,
-        { id, file, progress: 0, status: "uploading" },
-      ]);
+  const fingerprint = useMemo(
+    () =>
+      JSON.stringify({
+        title: normalizeDisplayText(formValues.title),
+        subtitle: normalizeDisplayText(formValues.subtitle),
+        category: normalizeDisplayText(formValues.category),
+        tags: parsedTags,
+        thumbnailMode,
+        thumbnailUrl: formValues.thumbnailUrl.trim(),
+        contentHtml: formValues.contentHtml.trim(),
+      }),
+    [
+      formValues.category,
+      formValues.contentHtml,
+      formValues.subtitle,
+      formValues.thumbnailUrl,
+      formValues.title,
+      parsedTags,
+      thumbnailMode,
+    ],
+  );
+  const categoryOptions = useMemo(
+    () => [
+      { value: "", label: "카테고리 선택 안 함" },
+      ...(categoriesQuery.data || []).map((category) => ({
+        value: String(category.id),
+        label: category.name,
+      })),
+    ],
+    [categoriesQuery.data],
+  );
 
-      const token = getToken();
-      const headers: Record<string, string> = token
-        ? { Authorization: `Bearer ${token}` }
-        : {};
+  const normalizedTitle = normalizeDisplayText(formValues.title);
+  const normalizedSubtitle = normalizeDisplayText(formValues.subtitle);
+  const normalizedCategory = normalizeDisplayText(formValues.category);
+
+  const canPublish =
+    normalizedTitle.length > 0 &&
+    hasBodyContent &&
+    !publishMutation.isPending &&
+    !patchMutation.isPending;
+  const isSubmittingPost = publishMutation.isPending || patchMutation.isPending;
+
+  const canSaveDraft =
+    (normalizedTitle.length > 0 || hasBodyContent) &&
+    !saveDraftMutation.isPending;
+  const publishChecklist = useMemo(
+    () => [
+      {
+        label: "제목 입력",
+        done: normalizedTitle.length > 0,
+      },
+      {
+        label: "본문 작성",
+        done: hasBodyContent,
+      },
+      {
+        label: "카테고리 선택",
+        done: normalizedCategory.length > 0,
+      },
+      {
+        label: "태그 1개 이상",
+        done: parsedTags.length > 0,
+      },
+      {
+        label: "대표 이미지 준비",
+        done: effectiveThumbnailUrl.trim().length > 0,
+      },
+    ],
+    [
+      effectiveThumbnailUrl,
+      normalizedCategory,
+      normalizedTitle,
+      hasBodyContent,
+      parsedTags.length,
+    ],
+  );
+
+  const saveDraft = useCallback(
+    async (silent: boolean) => {
+      if (!canSaveDraft) return;
 
       try {
-        const uploadedUrl = await uploadImageWithTus(file, {
-          headers,
-          onProgress: (uploadedBytes, totalBytes) => {
-            if (totalBytes <= 0) return;
-            const progress = Math.round((uploadedBytes / totalBytes) * 100);
-            setAttachmentPatch(id, { progress });
+        const result = await saveDraftMutation.mutateAsync({
+          draftId: activeDraftId,
+          request: {
+            title: normalizedTitle,
+            subtitle: normalizedSubtitle || undefined,
+            category: normalizedCategory || undefined,
+            tags: parsedTags,
+            thumbnailUrl: effectiveThumbnailUrl || undefined,
+            contentHtml: formValues.contentHtml,
+            contentJson: formValues.contentJson,
           },
         });
 
-        const absoluteUrl = toAbsoluteApiUrl(uploadedUrl);
-        const uploadId =
-          extractUploadId(absoluteUrl) || extractUploadId(uploadedUrl);
-        const downloadUrl = uploadId
-          ? `${API_BASE_URL}/attach-files/uploads/${uploadId}/download`
-          : absoluteUrl;
-
-        setAttachmentPatch(id, {
-          status: "done",
-          progress: 100,
-          url: absoluteUrl,
-          downloadUrl,
-        });
+        setActiveDraftId(result.id);
+        setLastSavedAt(result.updatedAt);
+        latestSavedFingerprintRef.current = fingerprint;
+        if (!silent) {
+          success("임시저장을 완료했습니다.");
+        }
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "파일 업로드 실패";
-        setAttachmentPatch(id, {
-          status: "error",
-          error: message,
-        });
+        if (!silent) {
+          showError(toErrorMessage(error));
+        }
       }
     },
-    [attachments, setAttachmentPatch],
+    [
+      activeDraftId,
+      canSaveDraft,
+      effectiveThumbnailUrl,
+      fingerprint,
+      formValues.category,
+      formValues.contentHtml,
+      formValues.contentJson,
+      formValues.subtitle,
+      formValues.title,
+      parsedTags,
+      saveDraftMutation,
+      showError,
+      success,
+    ],
   );
 
-  const uploadAttachmentFiles = useCallback(
-    async (files: File[]) => {
-      if (files.length === 0) return;
-      await Promise.all(files.map((file) => uploadAttachmentFile(file)));
-    },
-    [uploadAttachmentFile],
-  );
-
-  const handleAttachmentSelect = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const selected = Array.from(event.target.files || []);
-      event.target.value = "";
-      await uploadAttachmentFiles(selected);
-    },
-    [uploadAttachmentFiles],
-  );
-
-  useEffect(() => {
-    const onPaste = async (event: ClipboardEvent) => {
-      const activeElement = document.activeElement as HTMLElement | null;
-      if (activeElement?.getAttribute("contenteditable") === "true") return;
-
-      const items = Array.from(event.clipboardData?.items || []);
-      const files = items
-        .filter((item) => item.kind === "file")
-        .map((item) => item.getAsFile())
-        .filter((file): file is File => file !== null);
-
-      if (files.length === 0) return;
-
-      event.preventDefault();
-      await uploadAttachmentFiles(files);
-    };
-
-    window.addEventListener("paste", onPaste);
-    return () => window.removeEventListener("paste", onPaste);
-  }, [uploadAttachmentFiles]);
-
-  const removeAttachment = useCallback((id: string) => {
-    setAttachments((prev) => prev.filter((item) => item.id !== id));
-  }, []);
-
-  const copyAttachmentUrl = useCallback(async (url?: string) => {
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      noticeDialog.show("첨부파일 링크를 복사했습니다.");
-    } catch (error) {
-      console.error("클립보드 복사 실패:", error);
-      noticeDialog.show("클립보드 복사에 실패했습니다.");
-    }
-  }, [noticeDialog.show]);
-
-  const insertAttachmentLinkToContent = useCallback(
-    (item: AttachmentUploadItem) => {
-      const href = item.downloadUrl || item.url;
-      if (!href) return;
-
-      const linkHtml = `<p><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.file.name)}</a></p>`;
-      setFormData((prev) => ({
-        ...prev,
-        content: `${prev.content}${linkHtml}`,
-      }));
-      setActiveTab("write");
-    },
-    [],
-  );
-
-  const isUploadingAttachment = attachments.some(
-    (item) => item.status === "uploading",
-  );
-  const isPendingSubmit = createPostMutation.isPending;
-  const isActionLocked = isUploadingAttachment || isPendingSubmit;
-
-  const completeAttachmentCount = attachments.filter(
-    (item) => item.status === "done",
-  ).length;
-  const failedAttachmentCount = attachments.filter(
-    (item) => item.status === "error",
-  ).length;
-
-  const plainContentText = useMemo(
-    () => stripHtml(formData.content),
-    [formData.content],
-  );
-  const previewContent = useMemo(() => {
-    const attachmentHtml = buildAttachmentSectionHtml(
-      attachments,
-      formData.content,
-    );
-    return `${formData.content}${attachmentHtml}`;
-  }, [attachments, formData.content]);
-
-  const tabIndex = composeTabs.findIndex((tab) => tab.key === activeTab);
-
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-
-    if (!formData.title.trim() || !formData.content.trim()) {
-      noticeDialog.show("제목과 내용을 모두 입력해주세요.");
-      return;
+  const commitTagInput = useCallback((rawValue: string) => {
+    const incomingTags = tokenizeTagInput(rawValue);
+    if (incomingTags.length === 0) {
+      setTagInputValue("");
+      return false;
     }
 
-    if (isUploadingAttachment) {
-      noticeDialog.show("첨부파일 업로드가 끝난 후 게시해주세요.");
-      return;
+    const normalizedCurrentTags = parsedTags.map((tag) => tag.trim());
+    const nextTags = [...normalizedCurrentTags];
+    const seen = new Set(normalizedCurrentTags.map((tag) => tag.toLocaleLowerCase()));
+    let changed = false;
+
+    incomingTags.forEach((tag) => {
+      const normalizedTag = normalizeTagToken(tag);
+      if (!normalizedTag) return;
+
+      const key = normalizedTag.toLocaleLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      nextTags.push(normalizedTag);
+      changed = true;
+    });
+
+    if (!changed) {
+      setTagInputValue("");
+      return false;
     }
 
-    try {
-      const token = getToken();
-      const headers: Record<string, string> = token
-        ? { Authorization: `Bearer ${token}` }
-        : {};
+    setFormValues((prev) => {
+      const currentTags = parseTagText(prev.tagsText);
+      const nextTags = [...currentTags];
+      const seen = new Set(currentTags.map((tag) => tag.toLocaleLowerCase()));
 
-      const processedContent = await processContentImages(
-        formData.content,
-        headers,
-      );
-      const attachmentHtml = buildAttachmentSectionHtml(
-        attachments,
-        processedContent,
-      );
-      const finalContent = `${processedContent}${attachmentHtml}`;
+      incomingTags.forEach((tag) => {
+        const normalizedTag = normalizeTagToken(tag);
+        if (!normalizedTag) return;
 
-      await createPostMutation.mutateAsync({
-        title: formData.title.trim(),
-        content: finalContent.trim(),
+        const key = normalizedTag.toLocaleLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        nextTags.push(normalizedTag);
       });
 
-      navigate("/posts");
+      return { ...prev, tagsText: stringifyTags(nextTags) };
+    });
+
+    setTagInputValue("");
+    return true;
+  }, [parsedTags, setTagInputValue, setFormValues]);
+
+  const removeTag = useCallback((removedTag: string) => {
+    setFormValues((prev) => {
+      const currentTags = parseTagText(prev.tagsText);
+      const nextTags = currentTags.filter(
+        (tag) => tag.toLocaleLowerCase() !== removedTag.toLocaleLowerCase(),
+      );
+      if (nextTags.length === currentTags.length) {
+        return prev;
+      }
+      return { ...prev, tagsText: stringifyTags(nextTags) };
+    });
+  }, []);
+
+  const publishPost = async () => {
+    const normalizedPublishTitle = normalizeTitleForPublish(normalizedTitle);
+
+    if (!normalizedPublishTitle) {
+      showError("제목을 입력해 주세요.");
+      return;
+    }
+    if (!hasSlugConvertibleChar(normalizedPublishTitle)) {
+      showError("제목에 한글/영문/숫자를 1자 이상 포함해 주세요.");
+      return;
+    }
+    if (!hasBodyContent) {
+      showError("본문 내용을 입력해 주세요.");
+      return;
+    }
+
+    try {
+      const request = {
+        title: normalizedPublishTitle,
+        subtitle: normalizedSubtitle || undefined,
+        category: normalizedCategory || undefined,
+        tags: parsedTags,
+        thumbnailUrl: effectiveThumbnailUrl || undefined,
+        contentHtml: formValues.contentHtml,
+        contentJson: formValues.contentJson,
+        publishNow: true,
+        draftId: activeDraftId,
+      };
+
+      if (isEditMode && typeof editingPostId !== "number") {
+        showError("수정할 게시글 정보를 확인할 수 없습니다.");
+        return;
+      }
+
+      const created = isEditMode
+        ? await patchMutation.mutateAsync({
+            postId: editingPostId as number,
+            request,
+          })
+        : await publishMutation.mutateAsync(request);
+
+      if (typeof activeDraftId === "number") {
+        try {
+          await deleteDraftMutation.mutateAsync(activeDraftId);
+        } catch (cleanupError) {
+          const cleanupStatus = getErrorStatus(cleanupError);
+          if (cleanupStatus !== 404 && cleanupStatus !== 409) {
+            showError(toErrorMessage(cleanupError));
+          }
+        }
+      }
+
+      success(isEditMode ? "게시글이 수정되었습니다." : "게시글이 등록되었습니다.");
+      navigate(resolvePostPath(created.id), { replace: true });
     } catch (error) {
-      console.error("게시글 작성 실패:", error);
-      noticeDialog.show("게시글 작성에 실패했습니다.");
+      showError(toErrorMessage(error));
     }
   };
 
-  return (
-    <div className="relative mx-auto max-w-6xl overflow-x-hidden px-3 pb-32 pt-4 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-72 bg-[radial-gradient(circle_at_20%_10%,rgba(59,130,246,0.15),transparent_45%),radial-gradient(circle_at_85%_12%,rgba(99,102,241,0.12),transparent_38%)] dark:bg-[radial-gradient(circle_at_20%_10%,rgba(29,78,216,0.2),transparent_45%),radial-gradient(circle_at_85%_12%,rgba(67,56,202,0.2),transparent_38%)] sm:block" />
+  useEffect(() => {
+    if (!isEditMode || !editTargetQuery.data) return;
+    if (typeof editingPostId !== "number") return;
 
-      <div className="mb-5 flex flex-col items-stretch gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="mb-2 text-sm font-semibold text-blue-700">
-            Story Studio
-          </p>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
-            새 글 작성
-          </h1>
-          <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 sm:text-sm">
-            토스 스타일의 빠른 편집 흐름으로 글, 첨부, 미리보기를 한 번에
-            관리하세요.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => navigate("/posts")}
-          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
-        >
-          목록으로
-        </Button>
+    const target = editTargetQuery.data;
+    const hasThumbnail = Boolean(target.thumbnailUrl?.trim());
+    const resolvedThumbnailMode = hasThumbnail
+      ? ThumbnailMode.MANUAL_UPLOAD
+      : ThumbnailMode.AUTO_FROM_CONTENT;
+    const resolvedCategory = normalizeDisplayText(
+      typeof target.category?.id === "number"
+        ? String(target.category.id)
+        : (target.category?.name ?? ""),
+    );
+    const tags = target.tags.map((tag) => tag.name).filter((name) => name.trim().length > 0);
+    const incomingFingerprint = JSON.stringify({
+        title: normalizeDisplayText(target.title),
+        subtitle: normalizeDisplayText(target.subtitle),
+        category: resolvedCategory,
+      tags,
+      thumbnailMode: resolvedThumbnailMode,
+      thumbnailUrl: target.thumbnailUrl || "",
+      contentHtml: target.contentHtml || "",
+    });
+    const isSamePost = initializedEditPostIdRef.current === editingPostId;
+    const hasLocalEdits =
+      isSamePost && fingerprint !== editInitialFingerprintRef.current;
+    const alreadyHydratedWithIncoming =
+      isSamePost && fingerprint === incomingFingerprint;
+
+    if (hasLocalEdits || alreadyHydratedWithIncoming) return;
+
+    setFormValues({
+      title: normalizeDisplayText(target.title),
+      subtitle: normalizeDisplayText(target.subtitle),
+      category: resolvedCategory,
+      tagsText: stringifyTags(tags),
+      thumbnailUrl: target.thumbnailUrl || "",
+      contentHtml: target.contentHtml || "",
+      contentJson: target.contentJson,
+    });
+    setThumbnailMode(resolvedThumbnailMode);
+    setComposeMode(ComposeMode.WRITE);
+    setActiveDraftId(undefined);
+    setLastSavedAt(undefined);
+    setTagInputValue("");
+    latestSavedFingerprintRef.current = incomingFingerprint;
+    editInitialFingerprintRef.current = latestSavedFingerprintRef.current;
+    initializedEditPostIdRef.current = editingPostId;
+  }, [
+    editTargetQuery.data,
+    editingPostId,
+    fingerprint,
+    isEditMode,
+  ]);
+
+  const loadDraft = async (draftId: number) => {
+    setIsLoadingDraft(true);
+
+    try {
+      const draft = await getPostDraft(draftId);
+      const hasThumbnail = Boolean(draft.thumbnailUrl?.trim());
+      const resolvedThumbnailMode = hasThumbnail
+        ? ThumbnailMode.MANUAL_UPLOAD
+        : ThumbnailMode.AUTO_FROM_CONTENT;
+
+      setFormValues({
+        title: normalizeDisplayText(draft.title),
+        subtitle: normalizeDisplayText(draft.subtitle),
+        category: normalizeDisplayText(draft.category),
+        tagsText: stringifyTags(draft.tags),
+        thumbnailUrl: draft.thumbnailUrl || "",
+        contentHtml: draft.contentHtml,
+        contentJson: draft.contentJson,
+      });
+      setTagInputValue("");
+      setThumbnailMode(resolvedThumbnailMode);
+      setComposeMode(ComposeMode.WRITE);
+      setActiveDraftId(draft.id);
+      setLastSavedAt(draft.updatedAt);
+      latestSavedFingerprintRef.current = JSON.stringify({
+        title: normalizeDisplayText(draft.title),
+        subtitle: normalizeDisplayText(draft.subtitle),
+        category: normalizeDisplayText(draft.category),
+        tags: draft.tags,
+        thumbnailMode: resolvedThumbnailMode,
+        thumbnailUrl: draft.thumbnailUrl || "",
+        contentHtml: draft.contentHtml,
+      });
+      success("임시저장 글을 불러왔습니다.");
+    } catch (error) {
+      showError(toErrorMessage(error));
+    } finally {
+      setIsLoadingDraft(false);
+    }
+  };
+
+  const removeDraft = async (draftId: number) => {
+    try {
+      await deleteDraftMutation.mutateAsync(draftId);
+      if (activeDraftId === draftId) {
+        setActiveDraftId(undefined);
+      }
+      success("임시저장을 삭제했습니다.");
+    } catch (error) {
+      showError(toErrorMessage(error));
+    }
+  };
+
+  const handleThumbnailFileChange = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !file.type.startsWith("image/")) return;
+
+    setIsUploadingThumbnail(true);
+    try {
+      const uploaded = await uploadPostImage(file);
+      setFormValues((prev) => ({ ...prev, thumbnailUrl: uploaded.url }));
+      setThumbnailMode(ThumbnailMode.MANUAL_UPLOAD);
+      success("대표 이미지가 업로드되었습니다.");
+    } catch (error) {
+      showError(toErrorMessage(error));
+    } finally {
+      setIsUploadingThumbnail(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!canSaveDraft) return;
+    if (fingerprint === latestSavedFingerprintRef.current) return;
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = window.setTimeout(() => {
+      void saveDraft(true);
+    }, AUTOSAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [canSaveDraft, fingerprint, saveDraft]);
+
+  useEffect(() => {
+    if (!isFocusComposeOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFocusComposeOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isFocusComposeOpen]);
+
+  useEffect(() => {
+    if (!isFocusComposeOpen) return;
+
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousHtmlOverflow = documentElement.style.overflow;
+    const previousBodyOverscrollBehavior = body.style.overscrollBehavior;
+    const previousHtmlOverscrollBehavior = documentElement.style.overscrollBehavior;
+
+    body.style.overflow = "hidden";
+    documentElement.style.overflow = "hidden";
+    body.style.overscrollBehavior = "contain";
+    documentElement.style.overscrollBehavior = "contain";
+
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overflow = previousHtmlOverflow;
+      body.style.overscrollBehavior = previousBodyOverscrollBehavior;
+      documentElement.style.overscrollBehavior = previousHtmlOverscrollBehavior;
+    };
+  }, [isFocusComposeOpen]);
+
+  if (isEditMode && editTargetQuery.isLoading) {
+    return (
+      <div className="route-enter flex min-h-[48vh] flex-col items-center justify-center gap-3">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
+        <p className="text-sm font-semibold text-slate-500">게시글 불러오는 중...</p>
       </div>
+    );
+  }
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:hidden">
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-            본문 길이
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">
-            {plainContentText.length.toLocaleString()}자
-          </p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-            첨부 완료
-          </p>
-          <p className="mt-1 text-sm font-bold text-emerald-700">
-            {completeAttachmentCount}개
-          </p>
-        </div>
+  if (isEditMode && editTargetQuery.isError) {
+    return (
+      <div className="route-enter rounded-3xl border border-rose-200 bg-rose-50 p-6 text-center dark:border-rose-900/60 dark:bg-rose-950/30">
+        <p className="text-sm font-semibold text-rose-700 dark:text-rose-200">
+          {toErrorMessage(editTargetQuery.error)}
+        </p>
+        <Link to="/posts" className="mt-4 inline-flex">
+          <Button type="button" variant="outline">
+            목록으로
+          </Button>
+        </Link>
       </div>
+    );
+  }
 
-      <form
-        onSubmit={handleSubmit}
-        className="grid min-w-0 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
+  const renderComposeModeToggle = (
+    <div className="flex items-center gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+      <button
+        type="button"
+        onClick={() => setComposeMode(ComposeMode.WRITE)}
+        className={[
+          "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+          composeMode === ComposeMode.WRITE
+            ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+            : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
+        ].join(" ")}
       >
-        <div className="min-w-0 space-y-4 sm:space-y-6">
-          <section className="min-w-0 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_26px_64px_-44px_rgba(15,23,42,0.6)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_30px_72px_-48px_rgba(2,6,23,0.85)] sm:p-6">
-            <label
-              htmlFor="title"
-              className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200"
+        작성
+      </button>
+      <button
+        type="button"
+        onClick={() => setComposeMode(ComposeMode.PREVIEW)}
+        className={[
+          "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+          composeMode === ComposeMode.PREVIEW
+            ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+            : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
+        ].join(" ")}
+      >
+        미리보기
+      </button>
+      <span className="ml-auto pr-2 text-xs text-slate-500 dark:text-slate-400">
+        글자 수 {plainText.length.toLocaleString()}자
+      </span>
+    </div>
+  );
+
+  const renderMetaFields = (fullScreen: boolean) => (
+    <div className="space-y-4">
+      <div
+        className={
+          fullScreen ? "grid gap-3 sm:grid-cols-2" : "grid gap-4 sm:grid-cols-2"
+        }
+      >
+        <Input
+          label="제목"
+          value={formValues.title}
+          onChange={(event) =>
+            setFormValues((prev) => ({ ...prev, title: event.target.value }))
+          }
+          placeholder="독자가 클릭하고 싶은 제목"
+          maxLength={200}
+        />
+        <Input
+          label="부제"
+          value={formValues.subtitle}
+          onChange={(event) =>
+            setFormValues((prev) => ({ ...prev, subtitle: event.target.value }))
+          }
+          placeholder="요약 부제"
+          maxLength={255}
+        />
+        <Select
+          label="카테고리"
+          value={formValues.category}
+          onValueChange={(value) =>
+            setFormValues((prev) => ({
+              ...prev,
+              category: value,
+            }))
+          }
+          options={categoryOptions}
+          disabled={categoriesQuery.isLoading}
+          hint={
+            categoriesQuery.data?.length
+              ? "관리자에서 등록한 카테고리만 선택할 수 있습니다."
+              : "등록된 카테고리가 없습니다. 우선 카테고리 없이 작성할 수 있습니다."
+          }
+        />
+        <HashtagInput
+          label="태그 (해시태그)"
+          tags={parsedTags}
+          value={tagInputValue}
+          onValueChange={setTagInputValue}
+          onCommit={commitTagInput}
+          onRemove={removeTag}
+          hint="#을 생략하고 입력 후 Enter(또는 콤마)로 등록할 수 있습니다."
+        />
+      </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/60">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              대표 이미지
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              직접 업로드하거나 본문 첫 이미지를 자동 썸네일로 사용할 수
+              있습니다.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setThumbnailMode(ThumbnailMode.AUTO_FROM_CONTENT)}
+              className={[
+                "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                thumbnailMode === ThumbnailMode.AUTO_FROM_CONTENT
+                  ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
+              ].join(" ")}
             >
-              제목
-            </label>
-            <Input
-              id="title"
-              type="text"
-              value={formData.title}
-              onChange={(event) =>
-                setFormData((prev) => ({ ...prev, title: event.target.value }))
-              }
-              placeholder="독자가 스크롤을 멈추게 할 제목을 입력하세요"
-              className="h-11 rounded-2xl border-slate-200 text-[16px] dark:border-slate-700 sm:h-12"
-              maxLength={120}
-              required
-            />
-          </section>
-
-          <section className="min-w-0 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_26px_64px_-44px_rgba(15,23,42,0.6)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_30px_72px_-48px_rgba(2,6,23,0.85)] sm:p-6">
-            <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800/80 sm:mb-5">
-              <div className="relative col-span-3 grid grid-cols-3 gap-2">
-                <span
-                  className="absolute inset-y-0 left-0 w-[calc((100%-1rem)/3)] rounded-xl bg-white shadow-[0_12px_24px_-16px_rgba(15,23,42,0.55)] transition-transform duration-300 dark:bg-slate-900 dark:shadow-[0_14px_28px_-18px_rgba(2,6,23,0.9)]"
-                  style={{
-                    transform: `translateX(calc(${tabIndex} * (100% + 0.5rem)))`,
-                  }}
-                />
-                {composeTabs.map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setActiveTab(tab.key)}
-                    className={[
-                      "relative z-10 rounded-xl px-2.5 py-2 text-center text-xs transition-colors sm:px-3 sm:text-sm",
-                      activeTab === tab.key
-                        ? "font-bold text-slate-900 dark:text-slate-100"
-                        : "font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
-                    ].join(" ")}
-                  >
-                    <span className="block">{tab.label}</span>
-                    <span className="hidden text-[11px] opacity-80 sm:block">
-                      {tab.description}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {activeTab === "write" && (
-              <div className="animate-fade-in min-w-0 overflow-hidden">
-                <Suspense
-                  fallback={
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-10 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
-                      에디터를 준비하는 중...
-                    </div>
-                  }
-                >
-                  <RichTextEditor
-                    value={formData.content}
-                    onChange={(value: string) =>
-                      setFormData((prev) => ({ ...prev, content: value }))
-                    }
-                    placeholder="글의 핵심 메시지를 강하게 시작해보세요"
-                  />
-                </Suspense>
-              </div>
-            )}
-
-            {activeTab === "preview" && (
-              <div className="animate-fade-in rounded-3xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/70 sm:p-6">
-                {plainContentText.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                    미리보기 내용이 없습니다. 작성 탭에서 본문을 입력해보세요.
-                  </div>
-                ) : (
-                  <article
-                    className="prose prose-slate max-w-none break-words prose-headings:tracking-tight prose-img:rounded-2xl prose-img:shadow-md"
-                    dangerouslySetInnerHTML={{ __html: previewContent }}
-                  />
-                )}
-              </div>
-            )}
-
-            {activeTab === "attachments" && (
-              <div className="animate-fade-in rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/70 sm:p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
-                      첨부파일 업로드
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      파일 선택 또는 Ctrl/Cmd+V 붙여넣기로 업로드됩니다.
-                    </p>
-                  </div>
-                  <label className="inline-flex cursor-pointer items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
-                    파일 선택
-                    <input
-                      type="file"
-                      multiple
-                      className="hidden"
-                      onChange={handleAttachmentSelect}
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {attachments.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                      아직 업로드한 파일이 없습니다.
-                    </div>
-                  )}
-
-                  {attachments.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:p-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
-                            {item.file.name}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            {formatFileSize(item.file.size)}
-                          </p>
-
-                          {item.status === "uploading" && (
-                            <div className="mt-2">
-                              <div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-700">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-[width] duration-300"
-                                  style={{
-                                    width: `${Math.max(item.progress, 4)}%`,
-                                  }}
-                                />
-                              </div>
-                              <p className="mt-1 text-[11px] font-semibold text-blue-700">
-                                업로드 중 {item.progress}%
-                              </p>
-                            </div>
-                          )}
-
-                          {item.status === "done" && (
-                            <p className="mt-2 text-[11px] font-semibold text-emerald-700">
-                              업로드 완료
-                            </p>
-                          )}
-
-                          {item.status === "error" && (
-                            <p className="mt-2 text-[11px] font-semibold text-rose-700">
-                              실패: {item.error || "오류"}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex w-full flex-wrap items-center gap-2 text-xs sm:w-auto sm:flex-nowrap">
-                          {item.status === "done" && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  copyAttachmentUrl(
-                                    item.downloadUrl || item.url,
-                                  )
-                                }
-                                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
-                              >
-                                링크
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  insertAttachmentLinkToContent(item)
-                                }
-                                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
-                              >
-                                본문삽입
-                              </button>
-                            </>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => removeAttachment(item.id)}
-                            disabled={item.status === "uploading"}
-                            className="w-full rounded-lg border border-rose-100 bg-rose-50 px-2.5 py-1.5 font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300 dark:hover:bg-rose-950/60 sm:w-auto"
-                          >
-                            삭제
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+              본문 첫 이미지 자동
+            </button>
+            <button
+              type="button"
+              onClick={() => setThumbnailMode(ThumbnailMode.MANUAL_UPLOAD)}
+              className={[
+                "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                thumbnailMode === ThumbnailMode.MANUAL_UPLOAD
+                  ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
+              ].join(" ")}
+            >
+              직접 업로드
+            </button>
+          </div>
         </div>
 
-        <aside className="hidden space-y-4 lg:sticky lg:top-6 lg:block lg:h-fit">
-          <section className="rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_24px_56px_-44px_rgba(15,23,42,0.65)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[0_26px_62px_-46px_rgba(2,6,23,0.88)] sm:p-5">
-            <h2 className="text-sm font-bold text-slate-700 dark:text-slate-200">
-              작성 상태
-            </h2>
-            <div className="mt-3 space-y-2.5 text-sm">
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
-                <span className="text-slate-500 dark:text-slate-400">
-                  제목 길이
-                </span>
-                <span className="font-bold text-slate-800 dark:text-slate-100">
-                  {formData.title.trim().length}자
-                </span>
+        {thumbnailMode === ThumbnailMode.MANUAL_UPLOAD ? (
+          <div className="mt-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => thumbnailInputRef.current?.click()}
+              disabled={isUploadingThumbnail}
+            >
+              {isUploadingThumbnail ? "업로드 중..." : "대표 이미지 파일 첨부"}
+            </Button>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              JPG, PNG, WEBP 파일을 권장합니다.
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+            본문에 이미지가 있으면 첫 번째 이미지를 자동으로 썸네일에
+            사용합니다.
+          </p>
+        )}
+
+        <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+          {effectiveThumbnailUrl ? (
+            <img
+              src={effectiveThumbnailUrl}
+              alt="대표 이미지 미리보기"
+              className="h-[180px] w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-[180px] items-center justify-center text-xs text-slate-500 dark:text-slate-400">
+              대표 이미지가 없습니다.
+            </div>
+          )}
+        </div>
+
+        {thumbnailMode === ThumbnailMode.AUTO_FROM_CONTENT &&
+        !firstImageThumbnailUrl ? (
+          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+            본문에 이미지가 아직 없어 자동 썸네일을 만들 수 없습니다.
+          </p>
+        ) : null}
+      </section>
+
+      {categoriesQuery.isError ? (
+        <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+          카테고리 목록을 불러오지 못했습니다. 다시 시도해 주세요.
+        </p>
+      ) : null}
+    </div>
+  );
+
+  const renderEditorSection = (fullScreen: boolean) => (
+    <div className="space-y-3">
+      {renderComposeModeToggle}
+      {composeMode === ComposeMode.WRITE ? (
+        <Suspense fallback={<EditorLoader />}>
+          <BlogEditor
+            fullScreen={fullScreen}
+            valueHtml={formValues.contentHtml}
+            valueJson={formValues.contentJson}
+            onUploadImage={async (file) => {
+              const uploaded = await uploadPostImage(file);
+              return uploaded.url;
+            }}
+            onChange={(payload) => {
+              setFormValues((prev) => ({
+                ...prev,
+                contentHtml: payload.html,
+                contentJson: payload.json,
+              }));
+            }}
+          />
+        </Suspense>
+      ) : (
+        <article className="toss-editor-content prose prose-slate max-w-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 dark:prose-invert dark:border-slate-700 dark:bg-slate-900/60">
+          {safePreviewHtml.trim().length > 0 ? (
+            <div
+              dangerouslySetInnerHTML={{
+                __html: safePreviewHtml,
+              }}
+            />
+          ) : (
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              작성된 내용이 없습니다.
+            </p>
+          )}
+        </article>
+      )}
+    </div>
+  );
+
+  const renderDraftList = (maxItems?: number) => {
+    const items =
+      typeof maxItems === "number" ? draftItems.slice(0, maxItems) : draftItems;
+    return (
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+          임시저장 목록
+        </h2>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          최근에 저장한 초안을 이어서 작성할 수 있습니다.
+        </p>
+
+        <div className="mt-3 space-y-2">
+          {draftsQuery.isLoading ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              불러오는 중...
+            </p>
+          ) : null}
+
+          {!draftsQuery.isLoading && items.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-300 px-3 py-4 text-xs text-slate-500 dark:border-slate-600 dark:text-slate-400">
+              임시저장된 글이 없습니다.
+            </p>
+          ) : null}
+
+          {items.map((draft) => {
+            const isActive = draft.id === activeDraftId;
+            return (
+              <div
+                key={draft.id}
+                className={[
+                  "rounded-xl border p-3",
+                  isActive
+                    ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30"
+                    : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900",
+                ].join(" ")}
+              >
+                <p className="line-clamp-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {normalizeDisplayText(draft.title) || "제목 없는 초안"}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  {new Date(draft.updatedAt).toLocaleString("ko-KR")}
+                </p>
+
+                <div className="mt-2 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isLoadingDraft}
+                    onClick={() => {
+                      void loadDraft(draft.id);
+                    }}
+                  >
+                    불러오기
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={deleteDraftMutation.isPending}
+                    onClick={() => {
+                      void removeDraft(draft.id);
+                    }}
+                  >
+                    삭제
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
-                <span className="text-slate-500 dark:text-slate-400">
-                  본문 길이
-                </span>
-                <span className="font-bold text-slate-800 dark:text-slate-100">
-                  {plainContentText.length.toLocaleString()}자
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
-                <span className="text-slate-500 dark:text-slate-400">
-                  첨부 완료
-                </span>
-                <span className="font-bold text-emerald-700">
-                  {completeAttachmentCount}개
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/80">
-                <span className="text-slate-500 dark:text-slate-400">
-                  첨부 실패
-                </span>
-                <span className="font-bold text-rose-700">
-                  {failedAttachmentCount}개
-                </span>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
+  const focusComposeOverlay =
+    isFocusComposeOpen && typeof document !== "undefined"
+      ? createPortal(
+          <div className="fixed inset-0 z-[200] overflow-y-auto overscroll-contain bg-white dark:bg-slate-950">
+            <div className="min-h-dvh">
+              <header className="sticky top-0 z-10 flex w-full flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-sm dark:border-slate-700 dark:bg-slate-950/95 sm:px-6">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
+                    전체화면 작성 모드
+                  </h2>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      void saveDraft(false);
+                    }}
+                    disabled={!canSaveDraft}
+                  >
+                    {saveDraftMutation.isPending ? "저장 중..." : "임시저장"}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      void publishPost();
+                    }}
+                    disabled={!canPublish}
+                    isLoading={isSubmittingPost}
+                  >
+                    {isEditMode ? "수정 완료" : "등록하기"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setIsFocusComposeOpen(false)}
+                  >
+                    닫기 (ESC)
+                  </Button>
+                </div>
+              </header>
+
+              <div className="px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 sm:px-6 sm:pb-6 sm:pt-6">
+                <div className="grid w-full gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <section className="space-y-4">
+                    <div className="rounded-3xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+                      {renderMetaFields(true)}
+                    </div>
+                    <div className="rounded-3xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+                      {renderEditorSection(true)}
+                    </div>
+                  </section>
+
+                  <aside className="space-y-3">{renderDraftList(8)}</aside>
+                </div>
               </div>
             </div>
-          </section>
+          </div>,
+          document.body,
+        )
+      : null;
 
-          <section className="rounded-3xl border border-slate-200/80 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5">
-            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-              발행 액션
-            </h2>
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-              업로드 완료 후 게시하기가 활성화됩니다.
-            </p>
-            <div className="mt-4 space-y-2">
+  return (
+    <div className="relative min-h-screen bg-gradient-to-b from-slate-50 to-white pb-12 pt-6 dark:from-slate-950 dark:to-slate-900">
+      <input
+        ref={thumbnailInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => {
+          void handleThumbnailFileChange(event);
+        }}
+      />
+
+      <div className="mx-auto w-full max-w-[1440px] space-y-6 px-4 sm:px-6 lg:px-8">
+        <header className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
+                {isEditMode ? "글 수정" : "새 글 작성"}
+              </h1>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                {isEditMode
+                  ? "기존 글을 수정하고 바로 반영할 수 있습니다."
+                  : "워드처럼 바로 작성하고 이미지도 붙여넣기로 업로드할 수 있습니다."}
+              </p>
+            </div>
+
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
               <Button
-                type="submit"
-                disabled={isActionLocked}
-                className="h-11 w-full rounded-xl bg-blue-600 text-white hover:bg-blue-700"
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setIsFocusComposeOpen(true);
+                }}
               >
-                {isPendingSubmit ? "게시 중..." : "게시하기"}
+                전체화면 작성
               </Button>
               <Button
                 type="button"
-                variant="secondary"
-                onClick={() => navigate("/posts")}
-                disabled={isActionLocked}
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                variant="outline"
+                onClick={() => {
+                  void saveDraft(false);
+                }}
+                disabled={!canSaveDraft}
               >
-                취소
+                {saveDraftMutation.isPending ? "저장 중..." : "임시저장"}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  void publishPost();
+                }}
+                disabled={!canPublish}
+                isLoading={isSubmittingPost}
+              >
+                {isEditMode ? "수정 완료" : "등록하기"}
               </Button>
             </div>
-          </section>
-        </aside>
-
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 backdrop-blur dark:border-slate-700 dark:bg-slate-950/95 lg:hidden">
-          <div className="mx-auto flex w-full max-w-6xl items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => navigate("/posts")}
-              disabled={isActionLocked}
-              className="h-11 min-w-[92px] rounded-xl border border-slate-200 bg-white text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              취소
-            </Button>
-            <Button
-              type="submit"
-              disabled={isActionLocked}
-              className="h-11 flex-1 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
-            >
-              {isPendingSubmit ? "게시 중..." : "게시하기"}
-            </Button>
           </div>
-          <p className="mt-2 text-center text-[11px] text-slate-500 dark:text-slate-400">
-            첨부 완료 {completeAttachmentCount}개 · 실패 {failedAttachmentCount}
-            개
-          </p>
-        </div>
-      </form>
 
-      <ActionDialog
-        {...noticeDialog.dialogProps}
-      />
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span>글자 수 {plainText.length.toLocaleString()}자</span>
+            <span>·</span>
+            <span>
+              마지막 저장{" "}
+              {lastSavedAt
+                ? new Date(lastSavedAt).toLocaleString("ko-KR")
+                : "-"}
+            </span>
+            <span>·</span>
+            <span>{activeDraftId ? `Draft #${activeDraftId}` : "새 글"}</span>
+            {isEditMode ? (
+              <>
+                <span>·</span>
+                <span>수정 대상 #{editingPostId}</span>
+              </>
+            ) : null}
+          </div>
+        </header>
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="space-y-4">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+              {renderMetaFields(false)}
+            </div>
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+              {renderEditorSection(false)}
+            </div>
+          </section>
+
+          <aside className="space-y-4">
+            {renderDraftList()}
+            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  발행 준비 상태
+                </h2>
+                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                  {publishChecklist.filter((item) => item.done).length}/
+                  {publishChecklist.length} 완료
+                </span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {publishChecklist.map((item) => (
+                  <div
+                    key={item.label}
+                    className={[
+                      "flex items-center justify-between rounded-xl border px-3 py-2 text-xs",
+                      item.done
+                        ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-300"
+                        : "border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300",
+                    ].join(" ")}
+                  >
+                    <span>{item.label}</span>
+                    <span className="font-semibold">
+                      {item.done ? "완료" : "확인 필요"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                작성 안내
+              </h2>
+              <ul className="mt-3 space-y-1.5 text-xs leading-5 text-slate-600 dark:text-slate-400">
+                <li>
+                  • Ctrl+V, 드래그앤드롭으로 이미지를 본문에 넣을 수 있습니다.
+                </li>
+                <li>
+                  • 대표 이미지는 직접 업로드 또는 본문 첫 이미지 자동
+                  선택입니다.
+                </li>
+                <li>• 8초 간격으로 자동 임시저장이 동작합니다.</li>
+              </ul>
+
+              <Link
+                to="/posts"
+                className="mt-4 inline-flex text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
+              >
+                목록으로 돌아가기
+              </Link>
+            </section>
+          </aside>
+        </div>
+      </div>
+
+      {focusComposeOverlay}
     </div>
   );
 }
