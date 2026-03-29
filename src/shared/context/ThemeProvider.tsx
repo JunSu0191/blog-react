@@ -34,6 +34,9 @@ function resolveInitialTheme(): Theme {
 function applyThemeClass(theme: Theme) {
   if (typeof document === "undefined") return;
   document.documentElement.classList.toggle("dark", theme === "dark");
+  document.body.classList.toggle("dark", theme === "dark");
+  document.documentElement.dataset.theme = theme;
+  document.body.dataset.theme = theme;
 }
 
 export default function ThemeProvider({ children }: { children: ReactNode }) {

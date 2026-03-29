@@ -1,11 +1,35 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useMemo, type ReactNode } from "react";
-import { Bell, Home, MessageCircle, Shield, UserRound } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Bell,
+  FileText,
+  Home,
+  Lock,
+  Loader2,
+  LogIn,
+  MessageCircle,
+  PenSquare,
+  Search,
+  Shield,
+  UserRound,
+  X,
+} from "lucide-react";
 import { Avatar, AvatarFallback, Badge } from "@/components/ui";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+} from "@/components/ui/command";
 import { useAuthContext } from "../shared/context/useAuthContext";
-import { Button, ThemeToggle } from "../shared/ui";
-import { getUserId, getUserIdFromToken } from "@/shared/lib/auth";
+import { ActionDialog, Button, ThemeToggle } from "../shared/ui";
 import { preloadCreateFlow } from "./routePreload";
+import { usePostFeed } from "@/features/post/queries";
+import { resolvePostPath } from "@/features/post/utils/postContent";
 import {
   ChatUnreadRealtimeBridge,
   useChatTotalUnreadCount,
@@ -39,7 +63,8 @@ type MobileBottomTab = {
 };
 
 const defaultMenuItems: MenuItem[] = [
-  { label: "피드", path: "/posts" },
+  { label: "홈", path: "/home" },
+  { label: "글", path: "/posts" },
   { label: "글쓰기", path: "/posts/create" },
   { label: "채팅", path: "/chat" },
   { label: "마이페이지", path: "/mypage" },
@@ -91,44 +116,143 @@ function AdminIcon({ active }: MobileTabIconProps) {
 }
 
 const mobileBottomTabs: MobileBottomTab[] = [
-  { label: "홈", path: "/posts", icon: HomeIcon },
+  { label: "홈", path: "/home", icon: HomeIcon },
   { label: "채팅", path: "/chat", icon: ChatIcon },
   { label: "알림", path: "/notifications", icon: NotificationIcon },
   { label: "마이", path: "/mypage", icon: MyPageIcon },
   { label: "관리", path: "/admin/dashboard", icon: AdminIcon, adminOnly: true },
 ];
 
+function formatSpotlightDate(value?: string) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString("ko-KR", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function Layout({
   children,
   menuItems = defaultMenuItems,
 }: LayoutProps) {
-  const { logout, token, user } = useAuthContext();
+  const { logout, user } = useAuthContext();
+  const isAuthenticated = Boolean(user);
   const navigate = useNavigate();
   const location = useLocation();
   const currentUserId =
-    typeof user?.id === "number"
-      ? user.id
-      : (getUserId() ?? getUserIdFromToken(token) ?? undefined);
-  const { data: notificationData } = useNotifications(Boolean(token));
-  const { data: notificationSummary } = useNotificationSummary(Boolean(token));
+    typeof user?.id === "number" ? user.id : undefined;
+  const { data: notificationData } = useNotifications(isAuthenticated);
+  const { data: notificationSummary } = useNotificationSummary(isAuthenticated);
   const { data: chatUnreadCount = 0 } = useChatTotalUnreadCount(currentUserId);
   const userDisplayName = useMemo(() => {
     const name = typeof user?.name === "string" ? user.name.trim() : "";
     return name || "로그인 사용자";
   }, [user?.name]);
+  const myBlogPath = useMemo(() => {
+    const username = typeof user?.username === "string" ? user.username.trim() : "";
+    return username ? `/${encodeURIComponent(username)}` : "/login";
+  }, [user?.username]);
   const userInitial = userDisplayName.slice(0, 1).toUpperCase() || "U";
   const isMobileChatConversationOpen =
-    Boolean(token) &&
+    isAuthenticated &&
     location.pathname === "/chat" &&
     new URLSearchParams(location.search).has("conversationId");
+  const activeFeedSearchKeyword = useMemo(
+    () => new URLSearchParams(location.search).get("q")?.trim() ?? "",
+    [location.search],
+  );
+  const [spotlightSearchKeyword, setSpotlightSearchKeyword] = useState(
+    activeFeedSearchKeyword,
+  );
+  const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
+  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
+  const [authIntentPath, setAuthIntentPath] = useState<string>("/home");
+  const normalizedSpotlightKeyword = spotlightSearchKeyword.trim();
+  const currentPathWithSearchHash = `${location.pathname}${location.search}${location.hash}`;
+
+  const spotlightSearchQuery = usePostFeed(
+    {
+      q: normalizedSpotlightKeyword,
+      page: 0,
+      size: 8,
+    },
+    {
+      enabled: isSpotlightOpen && normalizedSpotlightKeyword.length > 0,
+    },
+  );
+  const spotlightPosts = useMemo(
+    () => spotlightSearchQuery.data?.content ?? [],
+    [spotlightSearchQuery.data?.content],
+  );
+
+  useEffect(() => {
+    if (isSpotlightOpen) return;
+    setSpotlightSearchKeyword(activeFeedSearchKeyword);
+  }, [activeFeedSearchKeyword, isSpotlightOpen]);
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/home");
   };
+  const openLoginPrompt = useCallback((path?: string) => {
+    setAuthIntentPath(path || currentPathWithSearchHash);
+    setIsAuthDialogOpen(true);
+  }, [currentPathWithSearchHash]);
+
+  const navigateWithAuth = useCallback((path: string, requiresAuth = false) => {
+    if (requiresAuth && !isAuthenticated) {
+      openLoginPrompt(path);
+      return;
+    }
+    navigate(path);
+  }, [isAuthenticated, navigate, openLoginPrompt]);
+
+  const applyFeedSearch = (keyword: string) => {
+    const normalizedKeyword = keyword.trim();
+    const nextSearchParams = new URLSearchParams();
+    if (normalizedKeyword.length > 0) {
+      nextSearchParams.set("q", normalizedKeyword);
+    }
+
+    const nextSearchText = nextSearchParams.toString();
+    const currentKeyword = new URLSearchParams(location.search).get("q")?.trim() ?? "";
+    if (location.pathname === "/search" && currentKeyword === normalizedKeyword) {
+      setIsSpotlightOpen(false);
+      return;
+    }
+    navigate(
+      {
+        pathname: "/search",
+        search: nextSearchText ? `?${nextSearchText}` : "",
+      },
+      { replace: location.pathname === "/search" },
+    );
+    setIsSpotlightOpen(false);
+  };
+  const openSpotlightSearch = useCallback(() => {
+    setSpotlightSearchKeyword(activeFeedSearchKeyword);
+    setIsSpotlightOpen(true);
+  }, [activeFeedSearchKeyword]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key.toLowerCase() !== "k") return;
+      if (!event.metaKey && !event.ctrlKey) return;
+      event.preventDefault();
+      openSpotlightSearch();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openSpotlightSearch]);
 
   const unreadNotificationCount = useMemo(() => {
-    if (!token) return 0;
+    if (!isAuthenticated) return 0;
     if (typeof notificationSummary?.unreadCount === "number") {
       return notificationSummary.unreadCount;
     }
@@ -136,32 +260,41 @@ export default function Layout({
       (page) => page.items,
     );
     return notifications.filter((item) => !item.isRead).length;
-  }, [notificationData?.pages, notificationSummary?.unreadCount, token]);
-  const unreadChatCount = token ? chatUnreadCount : 0;
+  }, [isAuthenticated, notificationData?.pages, notificationSummary?.unreadCount]);
+  const unreadChatCount = isAuthenticated ? chatUnreadCount : 0;
   const isAdminUser = user?.role?.toUpperCase() === "ADMIN";
   const resolvedMenuItems = useMemo(() => {
+    const baseItems = isAuthenticated
+      ? menuItems
+      : menuItems.filter((item) => item.path !== "/mypage");
     const normalizedRole = user?.role?.toUpperCase();
-    if (normalizedRole !== "ADMIN") return menuItems;
-    const hasAdmin = menuItems.some((item) => item.path === "/admin/dashboard");
-    if (hasAdmin) return menuItems;
-    return [...menuItems, { label: "관리자", path: "/admin/dashboard" }];
-  }, [menuItems, user?.role]);
+    if (normalizedRole !== "ADMIN") return baseItems;
+    const hasAdmin = baseItems.some((item) => item.path === "/admin/dashboard");
+    if (hasAdmin) return baseItems;
+    return [...baseItems, { label: "관리자", path: "/admin/dashboard" }];
+  }, [isAuthenticated, menuItems, user?.role]);
 
   const isMenuActive = (path: string) => {
+    if (path === "/home") {
+      return location.pathname === "/home";
+    }
     if (path === "/posts") {
       return (
         location.pathname === "/posts" ||
-        /^\/posts\/\d+$/.test(location.pathname)
+        /^\/posts\/\d+$/.test(location.pathname) ||
+        /^\/posts\/\d+\/edit$/.test(location.pathname)
       );
     }
     if (path === "/admin/dashboard") {
       return location.pathname.startsWith("/admin");
     }
+    if (path === "/mypage") {
+      return location.pathname === "/mypage" || location.pathname.startsWith("/mypage/");
+    }
     return location.pathname === path;
   };
 
-  const shouldRenderMobileBottomNav =
-    Boolean(token) && location.pathname !== "/posts/create";
+  const shouldRenderMobileBottomNav = isAuthenticated;
   const shouldHideMobileChatChrome = isMobileChatConversationOpen;
   const shouldUseRouteEnter = location.pathname !== "/chat";
   const visibleMobileBottomTabs = useMemo(
@@ -174,42 +307,56 @@ export default function Layout({
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <NotificationRealtimeBridge />
-      <ChatUnreadRealtimeBridge />
+      {isAuthenticated ? <NotificationRealtimeBridge /> : null}
+      {isAuthenticated ? <ChatUnreadRealtimeBridge /> : null}
 
       <header
         className={[
           "sticky top-0 z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur-xl transition-[opacity,transform] duration-200 ease-out dark:border-slate-800/90 dark:bg-slate-950/80",
           shouldHideMobileChatChrome
-            ? "pointer-events-none invisible -translate-y-1 opacity-0 lg:pointer-events-auto lg:visible lg:translate-y-0 lg:opacity-100"
+            ? "pointer-events-none invisible h-0 -translate-y-1 overflow-hidden border-b-0 opacity-0 lg:pointer-events-auto lg:visible lg:h-auto lg:translate-y-0 lg:overflow-visible lg:border-b lg:opacity-100"
             : "translate-y-0 opacity-100",
         ].join(" ")}
       >
-        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div
+          className={[
+            "mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8",
+          ].join(" ")}
+        >
           <Link
-            to="/posts"
+            to="/home"
             className="text-lg font-black tracking-tight text-slate-900 dark:text-slate-100"
           >
-            Blog Pulse
+            Blog Pause
           </Link>
 
           <nav className="hidden items-center gap-2 md:flex">
             {resolvedMenuItems.map((item) => {
               const isActive = isMenuActive(item.path);
               const showChatUnreadBadge =
-                item.path === "/chat" && unreadChatCount > 0;
+                isAuthenticated && item.path === "/chat" && unreadChatCount > 0;
+              const requiresAuth =
+                item.path === "/posts/create" ||
+                item.path === "/chat" ||
+                item.path === "/notifications" ||
+                item.path === "/mypage";
 
               return (
                 <Link
                   key={item.path}
                   to={item.path}
+                  onClick={(event) => {
+                    if (!requiresAuth || isAuthenticated) return;
+                    event.preventDefault();
+                    openLoginPrompt(item.path);
+                  }}
                   onMouseEnter={() => {
-                    if (item.path === "/posts/create") {
+                    if (item.path === "/posts/create" && isAuthenticated) {
                       void preloadCreateFlow();
                     }
                   }}
                   onFocus={() => {
-                    if (item.path === "/posts/create") {
+                    if (item.path === "/posts/create" && isAuthenticated) {
                       void preloadCreateFlow();
                     }
                   }}
@@ -240,60 +387,134 @@ export default function Layout({
             })}
           </nav>
 
-          {token && (
-            <div className="hidden items-center gap-2 sm:gap-3 md:flex">
-              <ThemeToggle />
-              <NotificationBell />
-              <Link
-                to="/mypage"
-                className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 sm:flex"
-              >
-                <Avatar className="h-6 w-6 border border-blue-200/80 dark:border-blue-900/50">
-                  <AvatarFallback className="bg-blue-600 text-[11px] font-bold text-white">
-                    {userInitial}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="max-w-[10rem] truncate">
-                  {userDisplayName}
-                </span>
-              </Link>
+          <div className="hidden items-center gap-2 sm:gap-3 md:flex">
+            <ThemeToggle className="rounded-xl" />
+            <button
+              type="button"
+              onClick={openSpotlightSearch}
+              title="검색 (⌘K / Ctrl+K)"
+              aria-label="검색 열기"
+              className="group relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+              <span className="pointer-events-none absolute -bottom-8 left-1/2 inline-flex -translate-x-1/2 items-center whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[11px] font-medium text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100 dark:bg-slate-700 [writing-mode:horizontal-tb]">
+                검색
+              </span>
+            </button>
+
+            {isAuthenticated ? (
+              <>
+                <NotificationBell />
+                <Link to={myBlogPath}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl"
+                  >
+                    내 블로그
+                  </Button>
+                </Link>
+                <Link
+                  to="/mypage"
+                  className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 sm:flex"
+                >
+                  <Avatar className="h-6 w-6 border border-blue-200/80 dark:border-blue-900/50">
+                    <AvatarFallback className="bg-blue-600 text-[11px] font-bold text-white">
+                      {userInitial}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="max-w-[10rem] truncate">
+                    {userDisplayName}
+                  </span>
+                </Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="rounded-xl"
+                >
+                  로그아웃
+                </Button>
+              </>
+            ) : (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={handleLogout}
+                onClick={() => navigate("/login", { state: currentPathWithSearchHash })}
                 className="rounded-xl"
               >
-                로그아웃
+                로그인
               </Button>
-            </div>
-          )}
+            )}
+          </div>
 
-          {token && (
-            <div className="flex items-center gap-2 md:hidden">
-              <ThemeToggle />
-              <Link to="/mypage" aria-label="마이페이지 이동">
-                <Avatar className="h-8 w-8 border border-blue-200/80 dark:border-blue-900/50">
-                  <AvatarFallback className="bg-blue-600 text-[11px] font-semibold text-white">
-                    {userInitial}
-                  </AvatarFallback>
-                </Avatar>
-              </Link>
+          <div className="flex items-center gap-2 md:hidden">
+            <ThemeToggle className="h-8 w-8 rounded-lg" />
+            <button
+              type="button"
+              onClick={openSpotlightSearch}
+              title="검색 (⌘K / Ctrl+K)"
+              aria-label="검색 열기"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+            </button>
+
+            {isAuthenticated ? (
+              <>
+                <Link to={myBlogPath} aria-label="내 블로그 이동">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-lg px-2.5 text-[11px]"
+                  >
+                    블로그
+                  </Button>
+                </Link>
+                <Link to="/mypage" aria-label="마이페이지 이동">
+                  <Avatar className="h-8 w-8 border border-blue-200/80 dark:border-blue-900/50">
+                    <AvatarFallback className="bg-blue-600 text-[11px] font-semibold text-white">
+                      {userInitial}
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="h-8 rounded-lg px-2.5 text-[11px]"
+                >
+                  로그아웃
+                </Button>
+              </>
+            ) : (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={handleLogout}
+                onClick={() => navigate("/login", { state: currentPathWithSearchHash })}
                 className="h-8 rounded-lg px-2.5 text-[11px]"
               >
-                로그아웃
+                로그인
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 md:pb-6 lg:px-8">
+      <main
+        className={[
+          "w-full",
+          shouldHideMobileChatChrome
+            ? "px-0 pt-0 pb-0 md:mx-auto md:max-w-7xl md:px-6 md:pt-6 md:pb-6 lg:px-8"
+            : "mx-auto max-w-7xl px-4 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 md:pb-6 lg:px-8",
+        ].join(" ")}
+      >
         <div
           key={location.pathname}
           className={shouldUseRouteEnter ? "route-enter" : undefined}
@@ -301,6 +522,167 @@ export default function Layout({
           {children}
         </div>
       </main>
+
+      <CommandDialog open={isSpotlightOpen} onOpenChange={setIsSpotlightOpen}>
+        <CommandInput
+          value={spotlightSearchKeyword}
+          onValueChange={setSpotlightSearchKeyword}
+          placeholder="게시글 제목/본문 검색..."
+        />
+        <CommandList className="h-[min(60vh,520px)] max-h-[60vh]">
+          <CommandEmpty>검색어를 입력하면 게시글 검색을 실행할 수 있습니다.</CommandEmpty>
+
+          <CommandGroup heading="검색">
+            <CommandItem
+              disabled={normalizedSpotlightKeyword.length === 0}
+              onSelect={() => applyFeedSearch(spotlightSearchKeyword)}
+            >
+              <Search className="h-4 w-4" />
+              <span>
+                "{normalizedSpotlightKeyword}" 게시글 검색
+              </span>
+              <CommandShortcut>Enter</CommandShortcut>
+            </CommandItem>
+            {activeFeedSearchKeyword ? (
+              <CommandItem onSelect={() => applyFeedSearch("")}>
+                <Search className="h-4 w-4" />
+                <span>검색 초기화</span>
+              </CommandItem>
+            ) : null}
+          </CommandGroup>
+
+          {normalizedSpotlightKeyword.length > 0 ? (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="게시글 결과">
+                {spotlightSearchQuery.isLoading ? (
+                  <CommandItem disabled>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>검색 중...</span>
+                  </CommandItem>
+                ) : spotlightSearchQuery.error ? (
+                  <CommandItem disabled>
+                    <FileText className="h-4 w-4" />
+                    <span>검색 결과를 불러오지 못했습니다.</span>
+                  </CommandItem>
+                ) : spotlightPosts.length > 0 ? (
+                  spotlightPosts.map((post) => (
+                    <CommandItem
+                      key={`spotlight-post-${post.id}`}
+                      value={`${post.title} ${post.subtitle ?? ""} ${post.excerpt ?? ""}`}
+                      onSelect={() => {
+                        navigate(resolvePostPath(post.id));
+                        setIsSpotlightOpen(false);
+                      }}
+                      className="items-start"
+                    >
+                      <FileText className="mt-0.5 h-4 w-4" />
+                      <div className="min-w-0 space-y-1">
+                        <p className="line-clamp-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {post.title}
+                        </p>
+                        {post.excerpt ? (
+                          <p className="line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+                            {post.excerpt}
+                          </p>
+                        ) : null}
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                          {(post.category?.name || "미분류")} · 조회{" "}
+                          {post.viewCount.toLocaleString()}
+                          {post.publishedAt || post.createdAt
+                            ? ` · ${formatSpotlightDate(post.publishedAt || post.createdAt)}`
+                            : ""}
+                        </p>
+                      </div>
+                    </CommandItem>
+                  ))
+                ) : (
+                  <CommandItem disabled>
+                    <FileText className="h-4 w-4" />
+                    <span>일치하는 게시글이 없습니다.</span>
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            </>
+          ) : null}
+
+          <CommandSeparator />
+
+          <CommandGroup heading="빠른 이동">
+            <CommandItem
+              onSelect={() => {
+                navigate("/home");
+                setIsSpotlightOpen(false);
+              }}
+            >
+              <Home className="h-4 w-4" />
+              <span>홈</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                navigateWithAuth("/posts/create", true);
+                setIsSpotlightOpen(false);
+              }}
+            >
+              <PenSquare className="h-4 w-4" />
+              <span>글쓰기</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                navigateWithAuth("/chat", true);
+                setIsSpotlightOpen(false);
+              }}
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span>채팅</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                navigateWithAuth("/mypage", true);
+                setIsSpotlightOpen(false);
+              }}
+            >
+              <UserRound className="h-4 w-4" />
+              <span>마이페이지</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                navigateWithAuth("/notifications", true);
+                setIsSpotlightOpen(false);
+              }}
+            >
+              <Bell className="h-4 w-4" />
+              <span>알림</span>
+            </CommandItem>
+            {isAdminUser ? (
+              <CommandItem
+                onSelect={() => {
+                  navigate("/admin/dashboard");
+                  setIsSpotlightOpen(false);
+                }}
+              >
+                <FileText className="h-4 w-4" />
+                <span>관리자 대시보드</span>
+              </CommandItem>
+            ) : null}
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
+
+      <ActionDialog
+        open={isAuthDialogOpen}
+        onOpenChange={setIsAuthDialogOpen}
+        icon={<Lock className="h-5 w-5" aria-hidden="true" />}
+        title="로그인이 필요합니다"
+        description="로그인 페이지로 이동하시겠습니까?"
+        cancelIcon={<X className="h-4 w-4" aria-hidden="true" />}
+        confirmIcon={<LogIn className="h-4 w-4" aria-hidden="true" />}
+        cancelText="나중에 로그인하기"
+        confirmText="로그인 페이지 이동"
+        onConfirm={() => {
+          navigate("/login", { state: authIntentPath });
+        }}
+      />
 
       {shouldRenderMobileBottomNav && (
         <nav

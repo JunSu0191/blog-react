@@ -1,6 +1,6 @@
 let createPostPagePromise: Promise<unknown> | null = null;
 let postDetailPagePromise: Promise<unknown> | null = null;
-let richTextEditorPromise: Promise<unknown> | null = null;
+let editorPromise: Promise<unknown> | null = null;
 
 export function preloadCreatePostPage() {
   if (!createPostPagePromise) {
@@ -16,13 +16,13 @@ export function preloadPostDetailPage() {
   return postDetailPagePromise;
 }
 
-export function preloadRichTextEditor() {
-  if (!richTextEditorPromise) {
-    richTextEditorPromise = import("@/shared/ui/RichTextEditor");
+export function preloadPostEditor() {
+  if (!editorPromise) {
+    editorPromise = import("@/features/post/components/editor/BlogEditor");
   }
-  return richTextEditorPromise;
+  return editorPromise;
 }
 
 export function preloadCreateFlow() {
-  return Promise.all([preloadCreatePostPage(), preloadRichTextEditor()]);
+  return Promise.all([preloadCreatePostPage(), preloadPostEditor()]);
 }

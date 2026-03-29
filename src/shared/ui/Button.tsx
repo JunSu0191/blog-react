@@ -10,7 +10,10 @@ import { cn } from "@/shared/lib/cn";
 type LegacyVariant = "primary" | "secondary" | "ghost" | "outline";
 type LegacySize = "sm" | "md" | "lg" | "icon";
 
-const variantMap: Record<LegacyVariant, NonNullable<ShadcnButtonProps["variant"]>> = {
+const variantMap: Record<
+  LegacyVariant,
+  NonNullable<ShadcnButtonProps["variant"]>
+> = {
   primary: "brand",
   secondary: "secondary",
   ghost: "ghost",
@@ -43,13 +46,16 @@ export function buttonVariants({
   );
 }
 
-type ButtonProps = Omit<ComponentProps<typeof ShadcnButton>, "variant" | "size"> & {
-    variant?: LegacyVariant;
-    size?: LegacySize;
-    isLoading?: boolean;
-    loadingText?: ReactNode;
-    children: ReactNode;
-  };
+type ButtonProps = Omit<
+  ComponentProps<typeof ShadcnButton>,
+  "variant" | "size"
+> & {
+  variant?: LegacyVariant;
+  size?: LegacySize;
+  isLoading?: boolean;
+  loadingText?: ReactNode;
+  children: ReactNode;
+};
 
 export default function Button({
   variant,

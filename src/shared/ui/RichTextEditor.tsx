@@ -307,8 +307,8 @@ export default function RichTextEditor({
               onClick={() => editor.chain().focus().toggleOrderedList().run()}
             />
             <ToolbarButton
-              title="인용구"
-              label="❞"
+              title="강조 박스"
+              label="▍"
               active={editor.isActive("blockquote")}
               onClick={() => editor.chain().focus().toggleBlockquote().run()}
             />

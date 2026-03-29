@@ -25,6 +25,17 @@ type SelectProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & {
   options: Array<{ value: string | number; label: string }>;
 };
 
+const EMPTY_OPTION_INTERNAL_VALUE = "__radix_empty_option__";
+
+function toInternalOptionValue(rawValue: string | number) {
+  const normalized = String(rawValue);
+  return normalized === "" ? EMPTY_OPTION_INTERNAL_VALUE : normalized;
+}
+
+function toExternalOptionValue(rawValue: string) {
+  return rawValue === EMPTY_OPTION_INTERNAL_VALUE ? "" : rawValue;
+}
+
 export default function Select({
   label,
   error,
@@ -43,6 +54,7 @@ export default function Select({
 }: SelectProps) {
   const generatedId = useId();
   const selectId = id || generatedId;
+  const hasEmptyOption = options.some((option) => String(option.value) === "");
   const isControlled = value !== undefined;
   const normalizedDefaultValue = useMemo(() => {
     if (defaultValue === undefined || defaultValue === null) return "";
@@ -51,16 +63,21 @@ export default function Select({
   const [internalValue, setInternalValue] = useState(normalizedDefaultValue);
   const currentValue =
     value === undefined || value === null ? internalValue : String(value);
+  const internalCurrentValue =
+    currentValue === "" && hasEmptyOption
+      ? EMPTY_OPTION_INTERNAL_VALUE
+      : currentValue;
   const describedBy = error ? `${selectId}-error` : hint ? `${selectId}-hint` : undefined;
 
   const handleValueChange = (nextValue: string) => {
+    const externalValue = toExternalOptionValue(nextValue);
     if (!isControlled) {
-      setInternalValue(nextValue);
+      setInternalValue(externalValue);
     }
-    onValueChange?.(nextValue);
+    onValueChange?.(externalValue);
     onChange?.({
-      target: { value: nextValue, name } as EventTarget & HTMLSelectElement,
-      currentTarget: { value: nextValue, name } as EventTarget & HTMLSelectElement,
+      target: { value: externalValue, name } as EventTarget & HTMLSelectElement,
+      currentTarget: { value: externalValue, name } as EventTarget & HTMLSelectElement,
     } as ChangeEvent<HTMLSelectElement>);
   };
 
@@ -75,7 +92,7 @@ export default function Select({
         </Label>
       )}
       <ShadcnSelect
-        value={currentValue || undefined}
+        value={internalCurrentValue || undefined}
         onValueChange={handleValueChange}
         disabled={disabled}
       >
@@ -95,7 +112,10 @@ export default function Select({
         </SelectTrigger>
         <SelectContent>
           {options.map((opt) => (
-            <SelectItem key={String(opt.value)} value={String(opt.value)}>
+            <SelectItem
+              key={String(opt.value)}
+              value={toInternalOptionValue(opt.value)}
+            >
               {opt.label}
             </SelectItem>
           ))}

@@ -5,11 +5,22 @@ import type { ReactElement } from "react";
 import { AdminGuard, RequireAuth } from "./guards";
 
 const LoginPage = lazy(() => import("../features/user/pages/LoginPage"));
-const RegisterPage = lazy(() => import("../features/user/pages/RegisterPage"));
+const RegisterPage = lazy(() => import("../features/auth/pages/RegisterPage"));
+const FindIdPage = lazy(() => import("../features/auth/pages/FindIdPage"));
+const ResetPasswordPage = lazy(
+  () => import("../features/auth/pages/ResetPasswordPage"),
+);
+const OAuthCallbackPage = lazy(
+  () => import("../features/user/pages/OAuthCallbackPage"),
+);
 const ForbiddenPage = lazy(() => import("../features/user/pages/ForbiddenPage"));
 const ChangePasswordRequiredPage = lazy(
   () => import("../features/user/pages/ChangePasswordRequiredPage"),
 );
+const HomePage = lazy(() => import("../features/post/pages/HomePage"));
+const SearchPage = lazy(() => import("../features/post/pages/SearchPage"));
+const CategoryHubPage = lazy(() => import("../features/post/pages/CategoryHubPage"));
+const TagHubPage = lazy(() => import("../features/post/pages/TagHubPage"));
 const PostListPage = lazy(() => import("../features/post/pages/PostListPage"));
 const CreatePostPage = lazy(() => import("../features/post/pages/CreatePostPage"));
 const PostDetailPage = lazy(() => import("../features/post/pages/PostDetailPage"));
@@ -21,8 +32,20 @@ const AdminDashboardPage = lazy(
 );
 const AdminUsersPage = lazy(() => import("../features/admin/pages/AdminUsersPage"));
 const AdminPostsPage = lazy(() => import("../features/admin/pages/AdminPostsPage"));
+const AdminCategoriesPage = lazy(
+  () => import("../features/admin/pages/AdminCategoriesPage"),
+);
 const AdminCommentsPage = lazy(
   () => import("../features/admin/pages/AdminCommentsPage"),
+);
+const AdminCurationPage = lazy(
+  () => import("../features/admin/pages/AdminCurationPage"),
+);
+const BlogProfilePage = lazy(
+  () => import("../features/blog/pages/BlogProfilePage"),
+);
+const BlogCustomizePage = lazy(
+  () => import("../features/blog/pages/BlogCustomizePage"),
 );
 
 function RouteLoader() {
@@ -41,7 +64,7 @@ function LazyRoute({ children }: { children: ReactElement }) {
 export default function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<Navigate to="/home" replace />} />
       <Route
         path="/login"
         element={
@@ -59,18 +82,72 @@ export default function AppRouter() {
         }
       />
       <Route
+        path="/find-id"
+        element={
+          <LazyRoute>
+            <FindIdPage />
+          </LazyRoute>
+        }
+      />
+      <Route
+        path="/reset-password"
+        element={
+          <LazyRoute>
+            <ResetPasswordPage />
+          </LazyRoute>
+        }
+      />
+      <Route
+        path="/auth/callback"
+        element={
+          <LazyRoute>
+            <OAuthCallbackPage />
+          </LazyRoute>
+        }
+      />
+      <Route
         path="/*"
         element={
           <Layout>
             <Routes>
               <Route
+                path="/home"
+                element={
+                  <LazyRoute>
+                    <HomePage />
+                  </LazyRoute>
+                }
+              />
+              <Route
+                path="/search"
+                element={
+                  <LazyRoute>
+                    <SearchPage />
+                  </LazyRoute>
+                }
+              />
+              <Route
+                path="/categories/:categoryId"
+                element={
+                  <LazyRoute>
+                    <CategoryHubPage />
+                  </LazyRoute>
+                }
+              />
+              <Route
+                path="/tags/:tag"
+                element={
+                  <LazyRoute>
+                    <TagHubPage />
+                  </LazyRoute>
+                }
+              />
+              <Route
                 path="/posts"
                 element={
-                  <RequireAuth>
-                    <LazyRoute>
-                      <PostListPage />
-                    </LazyRoute>
-                  </RequireAuth>
+                  <LazyRoute>
+                    <PostListPage />
+                  </LazyRoute>
                 }
               />
               <Route
@@ -84,13 +161,21 @@ export default function AppRouter() {
                 }
               />
               <Route
-                path="/posts/:id"
+                path="/posts/:postId/edit"
                 element={
                   <RequireAuth>
                     <LazyRoute>
-                      <PostDetailPage />
+                      <CreatePostPage />
                     </LazyRoute>
                   </RequireAuth>
+                }
+              />
+              <Route
+                path="/posts/:postId"
+                element={
+                  <LazyRoute>
+                    <PostDetailPage />
+                  </LazyRoute>
                 }
               />
               <Route
@@ -99,6 +184,16 @@ export default function AppRouter() {
                   <RequireAuth>
                     <LazyRoute>
                       <MyPage />
+                    </LazyRoute>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/mypage/blog-customize"
+                element={
+                  <RequireAuth>
+                    <LazyRoute>
+                      <BlogCustomizePage />
                     </LazyRoute>
                   </RequireAuth>
                 }
@@ -176,6 +271,26 @@ export default function AppRouter() {
                 }
               />
               <Route
+                path="/admin/curation"
+                element={
+                  <AdminGuard>
+                    <LazyRoute>
+                      <AdminCurationPage />
+                    </LazyRoute>
+                  </AdminGuard>
+                }
+              />
+              <Route
+                path="/admin/categories"
+                element={
+                  <AdminGuard>
+                    <LazyRoute>
+                      <AdminCategoriesPage />
+                    </LazyRoute>
+                  </AdminGuard>
+                }
+              />
+              <Route
                 path="/admin/comments"
                 element={
                   <AdminGuard>
@@ -183,6 +298,14 @@ export default function AppRouter() {
                       <AdminCommentsPage />
                     </LazyRoute>
                   </AdminGuard>
+                }
+              />
+              <Route
+                path="/:username"
+                element={
+                  <LazyRoute>
+                    <BlogProfilePage />
+                  </LazyRoute>
                 }
               />
             </Routes>

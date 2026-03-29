@@ -41,13 +41,14 @@ export default function SegmentedControl<T extends string = string>({
         }
       }}
       className={cn(
-        "relative inline-flex gap-1 rounded-xl border border-slate-200 bg-slate-100/80 p-1 dark:border-slate-700 dark:bg-slate-800/80",
+        "relative grid w-full gap-1 overflow-hidden rounded-xl border border-slate-200/90 bg-slate-100/90 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-slate-700/90 dark:bg-slate-800/90 dark:shadow-none sm:w-auto",
         className,
       )}
+      style={{ gridTemplateColumns: `repeat(${optionCount}, minmax(0, 1fr))` }}
     >
       <span
         aria-hidden="true"
-        className="absolute bottom-1 left-1 top-1 rounded-lg bg-white shadow-[0_10px_22px_-16px_rgba(15,23,42,0.55)] transition-transform duration-300 ease-out dark:bg-slate-900 dark:shadow-[0_14px_24px_-18px_rgba(2,6,23,0.9)]"
+        className="pointer-events-none absolute bottom-1 left-1 top-1 rounded-lg bg-white shadow-[0_10px_26px_-18px_rgba(15,23,42,0.45)] transition-transform duration-300 ease-out dark:bg-slate-900 dark:shadow-[0_14px_28px_-18px_rgba(2,6,23,0.82)]"
         style={{
           width: `calc((100% - ${totalHorizontalPaddingRem}rem - ${totalGapRem}rem) / ${optionCount})`,
           transform: `translateX(calc(${activeIndex} * (100% + ${gapRem}rem)))`,
@@ -60,7 +61,7 @@ export default function SegmentedControl<T extends string = string>({
           variant="default"
           size="sm"
           className={cn(
-            "relative z-10 min-w-[84px] flex-1 rounded-lg border border-transparent px-3 text-sm font-semibold text-slate-500 hover:text-slate-700 data-[state=on]:border-transparent data-[state=on]:bg-transparent data-[state=on]:text-blue-700 data-[state=on]:shadow-none dark:text-slate-400 dark:hover:text-slate-100 dark:data-[state=on]:border-transparent dark:data-[state=on]:bg-transparent dark:data-[state=on]:text-blue-300",
+            "relative z-10 min-w-0 flex-1 whitespace-nowrap rounded-lg border border-transparent px-2 py-2 text-center text-[11px] font-semibold leading-none text-slate-500 transition-colors duration-200 hover:text-slate-700 data-[state=on]:border-transparent data-[state=on]:bg-transparent data-[state=on]:text-slate-900 data-[state=on]:shadow-none dark:text-slate-400 dark:hover:text-slate-100 dark:data-[state=on]:border-transparent dark:data-[state=on]:bg-transparent dark:data-[state=on]:text-slate-100 sm:min-w-[84px] sm:px-3 sm:text-[13px]",
             buttonClassName,
           )}
         >
