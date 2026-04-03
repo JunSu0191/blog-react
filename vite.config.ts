@@ -20,10 +20,6 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
 
-          if (id.includes("/@sentry/")) {
-            return "monitoring";
-          }
-
           if (
             id.includes("/@tiptap/") ||
             id.includes("/prosemirror-") ||
@@ -46,14 +42,6 @@ export default defineConfig({
             id.includes("/vaul/")
           ) {
             return "ui-kit";
-          }
-
-          if (
-            id.includes("/react/") ||
-            id.includes("/react-dom/") ||
-            id.includes("/scheduler/")
-          ) {
-            return "react-core";
           }
 
           if (id.includes("/react-router/") || id.includes("/react-router-dom/")) {
