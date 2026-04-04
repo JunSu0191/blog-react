@@ -59,7 +59,7 @@ function stripError<K extends keyof RegisterFormErrors>(
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { success, error: showError, info } = useToast();
+  const { success, error: showError } = useToast();
   const { token } = useAuthContext();
   const isPhoneVerificationEnabled = !import.meta.env.PROD;
 
@@ -296,11 +296,6 @@ export default function RegisterPage() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!isPhoneVerificationEnabled) {
-      showError("운영 환경에서는 회원가입이 현재 준비 중입니다.");
-      return;
-    }
-
     const nextErrors: RegisterFormErrors = {};
 
     const usernameValidation = validateRequiredText(form.username, "아이디를 입력해 주세요.");
@@ -324,7 +319,7 @@ export default function RegisterPage() {
     }
 
     const normalizedPhone = normalizePhoneNumber(form.phoneNumber);
-    if (!isValidPhoneNumber(normalizedPhone)) {
+    if (isPhoneVerificationEnabled && !isValidPhoneNumber(normalizedPhone)) {
       nextErrors.phoneNumber = "휴대폰 번호 형식이 올바르지 않습니다.";
     }
 
@@ -349,7 +344,7 @@ export default function RegisterPage() {
       nextErrors.nickname = "닉네임 중복확인을 완료해 주세요.";
     }
 
-    if (!isVerificationDone || !otpFlow.verificationId) {
+    if (isPhoneVerificationEnabled && (!isVerificationDone || !otpFlow.verificationId)) {
       nextErrors.verificationCode = "휴대폰 인증을 완료해 주세요.";
     }
 
@@ -359,7 +354,7 @@ export default function RegisterPage() {
     }
 
     const verificationId = otpFlow.verificationId;
-    if (!verificationId) {
+    if (isPhoneVerificationEnabled && !verificationId) {
       setFormErrors((previous) => ({
         ...previous,
         verificationCode: "휴대폰 인증을 완료해 주세요.",
@@ -376,9 +371,13 @@ export default function RegisterPage() {
         nickname: form.nickname.trim(),
         name: form.name.trim(),
         email: form.email.trim() || undefined,
-        phoneNumber: normalizedPhone,
         password: form.password,
-        verificationId,
+        ...(isPhoneVerificationEnabled
+          ? {
+              phoneNumber: normalizedPhone,
+              verificationId: verificationId ?? undefined,
+            }
+          : {}),
       });
 
       otpFlow.markCompleted();
@@ -423,7 +422,7 @@ export default function RegisterPage() {
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
           {isPhoneVerificationEnabled
             ? "아이디/닉네임 중복확인과 휴대폰 인증을 완료해야 가입할 수 있습니다."
-            : "운영 환경에서는 회원가입이 현재 준비 중입니다."}
+            : "아이디/닉네임 중복확인만 완료하면 회원가입할 수 있습니다."}
         </p>
 
         {formErrors.submit ? (
@@ -506,7 +505,7 @@ export default function RegisterPage() {
             />
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
-              운영 환경에서는 휴대폰 인증 기반 회원가입을 잠시 비활성화했습니다.
+              운영 환경에서는 휴대폰 인증을 생략하고 회원가입할 수 있습니다.
             </div>
           )}
 
@@ -536,11 +535,6 @@ export default function RegisterPage() {
             className="mt-2 w-full"
             isLoading={isSubmitting}
             disabled={!canSubmit}
-            onClick={() => {
-              if (!isPhoneVerificationEnabled) {
-                info("운영 환경에서는 회원가입이 현재 준비 중입니다.");
-              }
-            }}
           >
             회원가입
           </Button>

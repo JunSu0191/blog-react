@@ -55,8 +55,8 @@ export type RegisterRequest = {
   name: string;
   nickname: string;
   email?: string;
-  phoneNumber: string;
-  verificationId: number;
+  phoneNumber?: string;
+  verificationId?: number;
 };
 
 export type RegisterResponseData = {
