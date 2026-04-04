@@ -32,6 +32,17 @@ jobs:
         run: npm ci
 
       - name: Build
+        env:
+          VITE_API_BASE_URL: /api
+          VITE_WEB_BASE_URL: https://blog-pause.com
+          VITE_AUTH_REFRESH_URL: /api/auth/refresh
+          VITE_WS_URL: wss://blog-pause.com/ws
+          VITE_STOMP_DEBUG: "false"
+          VITE_DEV_USER_ID: ""
+          VITE_SENTRY_DSN: ""
+          VITE_SENTRY_ENVIRONMENT: production
+          VITE_SENTRY_RELEASE: blog-pause@production
+          VITE_SENTRY_TRACES_SAMPLE_RATE: "0"
         run: npm run build
 
       - name: Start SSH agent
