@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthContext } from "../../../shared/context/useAuthContext";
 import { Input, Button, ThemeToggle } from "../../../shared/ui";
 import { parseErrorMessage } from "@/shared/lib/errorParser";
+import { useToast } from "@/shared/ui/ToastProvider";
 import {
   getOAuthAuthorizationUrl,
   persistPostLoginRedirectPath,
@@ -92,12 +93,14 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { info } = useToast();
   const redirectPath = useMemo(
     () => resolveRedirectPathFromState(location.state),
     [location.state],
   );
 
   const { login: doLogin, token } = useAuthContext();
+  const isSocialLoginEnabled = !import.meta.env.PROD;
 
   // 이미 로그인되어 있다면 홈으로 리다이렉트
   useEffect(() => {
@@ -133,6 +136,10 @@ export default function LoginPage() {
 
   function handleSocialLogin(provider: OAuthProvider) {
     setError(null);
+    if (!isSocialLoginEnabled) {
+      info("소셜 로그인은 현재 준비 중입니다.");
+      return;
+    }
     persistPostLoginRedirectPath(redirectPath);
     window.location.href = getOAuthAuthorizationUrl(provider);
   }
@@ -210,6 +217,11 @@ export default function LoginPage() {
             </Button>
           ))}
         </div>
+        {!isSocialLoginEnabled ? (
+          <p className="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
+            소셜 로그인은 현재 준비 중입니다.
+          </p>
+        ) : null}
 
         <div className="mt-6 text-center">
           <p className="text-sm text-slate-600 dark:text-slate-400">

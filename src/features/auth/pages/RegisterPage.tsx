@@ -59,8 +59,9 @@ function stripError<K extends keyof RegisterFormErrors>(
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { success, error: showError } = useToast();
+  const { success, error: showError, info } = useToast();
   const { token } = useAuthContext();
+  const isPhoneVerificationEnabled = !import.meta.env.PROD;
 
   const [form, setForm] = useState<RegisterFormValues>(INITIAL_FORM_VALUES);
   const [formErrors, setFormErrors] = useState<RegisterFormErrors>({});
@@ -89,6 +90,7 @@ export default function RegisterPage() {
   }, [navigate, token]);
 
   const isVerificationDone =
+    !isPhoneVerificationEnabled ||
     otpFlow.status === VerificationStepStatus.VERIFIED ||
     otpFlow.status === VerificationStepStatus.COMPLETED;
 
@@ -294,6 +296,11 @@ export default function RegisterPage() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
+    if (!isPhoneVerificationEnabled) {
+      showError("운영 환경에서는 회원가입이 현재 준비 중입니다.");
+      return;
+    }
+
     const nextErrors: RegisterFormErrors = {};
 
     const usernameValidation = validateRequiredText(form.username, "아이디를 입력해 주세요.");
@@ -414,7 +421,9 @@ export default function RegisterPage() {
           회원가입
         </h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          아이디/닉네임 중복확인과 휴대폰 인증을 완료해야 가입할 수 있습니다.
+          {isPhoneVerificationEnabled
+            ? "아이디/닉네임 중복확인과 휴대폰 인증을 완료해야 가입할 수 있습니다."
+            : "운영 환경에서는 회원가입이 현재 준비 중입니다."}
         </p>
 
         {formErrors.submit ? (
@@ -462,38 +471,44 @@ export default function RegisterPage() {
             error={formErrors.email}
           />
 
-          <OtpVerificationPanel
-            title="휴대폰 인증"
-            description="인증번호 전송 후 확인을 완료해 주세요."
-            channel={VerificationChannel.SMS}
-            targetLabel="인증 대상"
-            targetPlaceholder="휴대폰 번호"
-            targetValue={form.phoneNumber}
-            onTargetChange={handlePhoneChange}
-            targetError={formErrors.phoneNumber}
-            codeValue={verificationCode}
-            onCodeChange={(value) => {
-              setVerificationCode(value);
-              setFormErrors((previous) => stripError(previous, ["verificationCode"]));
-            }}
-            codeError={formErrors.verificationCode}
-            onSendCode={() => {
-              void handleSendVerificationCode();
-            }}
-            onConfirmCode={() => {
-              void handleConfirmVerificationCode();
-            }}
-            stepStatus={otpFlow.status}
-            cooldownSeconds={otpFlow.cooldownSeconds}
-            expiresAt={otpFlow.expiresAt}
-            isSending={otpFlow.isSending}
-            isConfirming={otpFlow.isConfirming}
-            errorMessage={otpErrorMessage}
-            onRetry={otpFlow.error?.retriable ? handleRetryOtp : undefined}
-            canResend={otpFlow.canResend}
-            debugCode={otpFlow.debugCode}
-            disabled={isSubmitting}
-          />
+          {isPhoneVerificationEnabled ? (
+            <OtpVerificationPanel
+              title="휴대폰 인증"
+              description="인증번호 전송 후 확인을 완료해 주세요."
+              channel={VerificationChannel.SMS}
+              targetLabel="인증 대상"
+              targetPlaceholder="휴대폰 번호"
+              targetValue={form.phoneNumber}
+              onTargetChange={handlePhoneChange}
+              targetError={formErrors.phoneNumber}
+              codeValue={verificationCode}
+              onCodeChange={(value) => {
+                setVerificationCode(value);
+                setFormErrors((previous) => stripError(previous, ["verificationCode"]));
+              }}
+              codeError={formErrors.verificationCode}
+              onSendCode={() => {
+                void handleSendVerificationCode();
+              }}
+              onConfirmCode={() => {
+                void handleConfirmVerificationCode();
+              }}
+              stepStatus={otpFlow.status}
+              cooldownSeconds={otpFlow.cooldownSeconds}
+              expiresAt={otpFlow.expiresAt}
+              isSending={otpFlow.isSending}
+              isConfirming={otpFlow.isConfirming}
+              errorMessage={otpErrorMessage}
+              onRetry={otpFlow.error?.retriable ? handleRetryOtp : undefined}
+              canResend={otpFlow.canResend}
+              debugCode={otpFlow.debugCode}
+              disabled={isSubmitting}
+            />
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+              운영 환경에서는 휴대폰 인증 기반 회원가입을 잠시 비활성화했습니다.
+            </div>
+          )}
 
           <Input
             label="비밀번호"
@@ -521,6 +536,11 @@ export default function RegisterPage() {
             className="mt-2 w-full"
             isLoading={isSubmitting}
             disabled={!canSubmit}
+            onClick={() => {
+              if (!isPhoneVerificationEnabled) {
+                info("운영 환경에서는 회원가입이 현재 준비 중입니다.");
+              }
+            }}
           >
             회원가입
           </Button>
