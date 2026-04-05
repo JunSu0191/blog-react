@@ -9,7 +9,6 @@ import {
   getUserIdFromToken,
   setUserId,
 } from "@/shared/lib/auth";
-import { resolveDisplayName } from "@/shared/lib/displayName";
 import { parseErrorMessage } from "@/shared/lib/errorParser";
 import { unsubscribeChat } from "@/shared/socket/stompClient";
 import SurfaceCard from "@/shared/ui/SurfaceCard";
@@ -199,15 +198,16 @@ function toActionErrorMessage(error: unknown, fallback: string) {
 }
 
 function userLabel(user: ChatUserLike) {
-  return resolveDisplayName(user, `사용자 ${user.userId}`);
+  const nickname = typeof user.nickname === "string" ? user.nickname.trim() : "";
+  if (nickname) return nickname;
+
+  const name = typeof user.name === "string" ? user.name.trim() : "";
+  if (name) return name;
+
+  return "알 수 없음";
 }
 
-function userSubLabel(user: ChatUserLike) {
-  const nickname = typeof user.nickname === "string" ? user.nickname.trim() : "";
-  const name = typeof user.name === "string" ? user.name.trim() : "";
-
-  if (name && name !== nickname) return name;
-  if (!nickname && name) return name;
+function userSubLabel(..._args: unknown[]) {
   return undefined;
 }
 

@@ -572,13 +572,15 @@ export default function ChatRoom({
 
         {messages.map((message) => {
           const isMine = currentUserId && message.senderId === currentUserId;
+          const senderDisplayName =
+            typeof message.senderName === "string" ? message.senderName.trim() : "";
+          const senderMappedName =
+            typeof message.senderId === "number"
+              ? userDisplayNames?.[message.senderId]?.trim() || ""
+              : "";
           const senderLabel = isMine
             ? "나"
-            : message.senderName ||
-              (typeof message.senderId === "number"
-                ? userDisplayNames?.[message.senderId]
-                : undefined) ||
-              "알 수 없는 사용자";
+            : senderDisplayName || senderMappedName || "알 수 없음";
 
           return (
             <div

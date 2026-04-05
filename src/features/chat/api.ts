@@ -137,12 +137,12 @@ function normalizeParticipantList(value: unknown): {
     if (typeof participantUserId === "number") participantUserIds.push(participantUserId);
 
     const participantName = (
-      toText(obj.name) ||
-      toText(obj.username) ||
       toText(obj.nickname) ||
-      toText(nestedUser?.name) ||
-      toText(nestedUser?.username) ||
-      toText(nestedUser?.nickname)
+      toText(obj.displayName) ||
+      toText(obj.name) ||
+      toText(nestedUser?.nickname) ||
+      toText(nestedUser?.displayName) ||
+      toText(nestedUser?.name)
     ).trim();
 
     if (participantName) participantNames.push(participantName);
@@ -271,7 +271,10 @@ function normalizeUser(raw: unknown): ChatUserSummary | null {
       trimText(toText(obj.username)) || trimText(toText(nestedUser?.username)),
     name: trimText(toText(obj.name)) || trimText(toText(nestedUser?.name)),
     nickname:
-      trimText(toText(obj.nickname)) || trimText(toText(nestedUser?.nickname)),
+      trimText(toText(obj.nickname)) ||
+      trimText(toText(obj.displayName)) ||
+      trimText(toText(nestedUser?.nickname)) ||
+      trimText(toText(nestedUser?.displayName)),
   };
 }
 
@@ -425,7 +428,7 @@ function normalizeFriendRequest(
 
   if (typeof requestId !== "number") return null;
 
-  const requesterCandidate =
+  const requesterBase =
     (obj.requester && typeof obj.requester === "object"
       ? (obj.requester as Record<string, unknown>)
       : undefined) ||
@@ -434,7 +437,38 @@ function normalizeFriendRequest(
       : undefined) ||
     obj;
 
-  const targetCandidate =
+  const requesterCandidate: Record<string, unknown> = {
+    ...requesterBase,
+    userId:
+      requesterBase.userId ??
+      requesterBase.id ??
+      obj.requesterUserId ??
+      obj.fromUserId ??
+      obj.userId,
+    username:
+      requesterBase.username ??
+      obj.requesterUsername ??
+      obj.fromUsername ??
+      obj.username,
+    name: requesterBase.name ?? obj.requesterName ?? obj.fromName ?? obj.name,
+    nickname:
+      requesterBase.nickname ??
+      requesterBase.displayName ??
+      obj.requesterNickname ??
+      obj.fromNickname ??
+      obj.requesterDisplayName ??
+      obj.fromDisplayName ??
+      obj.nickname,
+    displayName:
+      requesterBase.displayName ??
+      requesterBase.nickname ??
+      obj.requesterDisplayName ??
+      obj.fromDisplayName ??
+      obj.requesterNickname ??
+      obj.fromNickname,
+  };
+
+  const targetBase =
     (obj.target && typeof obj.target === "object"
       ? (obj.target as Record<string, unknown>)
       : undefined) ||
@@ -442,6 +476,43 @@ function normalizeFriendRequest(
       ? (obj.toUser as Record<string, unknown>)
       : undefined) ||
     obj;
+
+  const targetCandidate: Record<string, unknown> = {
+    ...targetBase,
+    userId:
+      targetBase.userId ??
+      targetBase.id ??
+      obj.targetUserId ??
+      obj.toUserId ??
+      obj.friendUserId,
+    username:
+      targetBase.username ??
+      obj.targetUsername ??
+      obj.toUsername ??
+      obj.friendUsername ??
+      obj.username,
+    name:
+      targetBase.name ?? obj.targetName ?? obj.toName ?? obj.friendName ?? obj.name,
+    nickname:
+      targetBase.nickname ??
+      targetBase.displayName ??
+      obj.targetNickname ??
+      obj.toNickname ??
+      obj.friendNickname ??
+      obj.targetDisplayName ??
+      obj.toDisplayName ??
+      obj.friendDisplayName ??
+      obj.nickname,
+    displayName:
+      targetBase.displayName ??
+      targetBase.nickname ??
+      obj.targetDisplayName ??
+      obj.toDisplayName ??
+      obj.friendDisplayName ??
+      obj.targetNickname ??
+      obj.toNickname ??
+      obj.friendNickname,
+  };
 
   const requester = normalizeUser(requesterCandidate);
   const target = normalizeUser(targetCandidate);
@@ -540,15 +611,15 @@ function normalizeMessage(conversationId: number, raw: unknown): ChatMessage | n
       toFiniteNumber(sender?.userId) ??
       toFiniteNumber(sender?.id),
     senderName:
+      (obj.nickname as string | undefined) ||
+      (obj.displayName as string | undefined) ||
       (obj.senderName as string | undefined) ||
       (obj.sender_name as string | undefined) ||
-      (obj.username as string | undefined) ||
+      (obj.senderNickname as string | undefined) ||
+      (obj.sender_nickname as string | undefined) ||
       (obj.name as string | undefined) ||
-      (obj.senderUsername as string | undefined) ||
-      (obj.sender_username as string | undefined) ||
-      (sender?.name as string | undefined) ||
-      (sender?.username as string | undefined) ||
-      (sender?.nickname as string | undefined),
+      (sender?.nickname as string | undefined) ||
+      (sender?.name as string | undefined),
     content,
     createdAt:
       (obj.createdAt as string | undefined) ||
