@@ -419,22 +419,10 @@ export default function NotificationRealtimeBridge() {
           };
         },
       );
-
-      void queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
     });
 
     return unsubscribe;
   }, [activeConversationId, currentUserId, effectiveToken, queryClient, showToast]);
-
-  useEffect(() => {
-    if (!effectiveToken) return;
-    const intervalId = window.setInterval(() => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
-    }, 7000);
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [effectiveToken, queryClient]);
 
   useEffect(() => {
     if (!effectiveToken) return;

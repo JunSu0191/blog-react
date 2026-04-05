@@ -21,6 +21,9 @@ export function useNotifications(enabled = true) {
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextCursorId : undefined),
     enabled,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 
@@ -30,6 +33,8 @@ export function useNotificationSummary(enabled = true) {
     queryFn: () => getNotificationSummary(),
     enabled,
     staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 
