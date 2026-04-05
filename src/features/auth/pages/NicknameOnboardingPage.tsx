@@ -5,8 +5,6 @@ import { useToast } from "@/shared/ui/ToastProvider";
 import { useAuthContext } from "@/shared/context/useAuthContext";
 import { parseApiError } from "@/lib/apiError";
 import { resolveAuthErrorMessage } from "../constants/errorMessages";
-import { checkNicknameAvailability } from "../api/authApi";
-import { AvailabilityCheckStatus } from "../types/auth.form";
 import {
   hasCompletedNicknameOnboarding,
   markNicknameOnboardingCompleted,
@@ -16,16 +14,6 @@ import {
   resolveDisplayName,
 } from "@/shared/lib/displayName";
 import { useMyPage } from "@/features/social/hooks/useMyPage";
-
-type AvailabilityState = {
-  status: AvailabilityCheckStatus;
-  message?: string;
-  checkedValue?: string;
-};
-
-const IDLE_STATE: AvailabilityState = {
-  status: AvailabilityCheckStatus.IDLE,
-};
 
 function getRedirectPath(locationState: unknown) {
   if (!locationState || typeof locationState !== "object") return "/home";
@@ -37,7 +25,7 @@ function getRedirectPath(locationState: unknown) {
 export default function NicknameOnboardingPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuthContext();
+  const { user, updateUser } = useAuthContext();
   const { success, error: showError } = useToast();
   const { summary, updateProfile, isUpdatingProfile } = useMyPage();
   const redirectPath = getRedirectPath(location.state);
@@ -65,7 +53,6 @@ export default function NicknameOnboardingPage() {
   ]);
 
   const [nickname, setNickname] = useState(initialValue);
-  const [availability, setAvailability] = useState<AvailabilityState>(IDLE_STATE);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,56 +72,10 @@ export default function NicknameOnboardingPage() {
     }
   }, [navigate, redirectPath, user]);
 
-  const handleCheckAvailability = async () => {
-    const trimmed = nickname.trim();
-    if (!trimmed) {
-      setAvailability({
-        status: AvailabilityCheckStatus.UNAVAILABLE,
-        message: "닉네임을 입력해 주세요.",
-        checkedValue: undefined,
-      });
-      return;
-    }
-
-    setAvailability({
-      status: AvailabilityCheckStatus.CHECKING,
-      message: "닉네임 사용 가능 여부를 확인 중입니다.",
-      checkedValue: trimmed,
-    });
-
-    try {
-      const result = await checkNicknameAvailability({ nickname: trimmed });
-      setAvailability({
-        status: result.available
-          ? AvailabilityCheckStatus.AVAILABLE
-          : AvailabilityCheckStatus.UNAVAILABLE,
-        message: result.available
-          ? "사용 가능한 닉네임입니다."
-          : "이미 사용 중인 닉네임입니다.",
-        checkedValue: trimmed,
-      });
-    } catch (error) {
-      const parsed = parseApiError(error);
-      setAvailability({
-        status: AvailabilityCheckStatus.UNAVAILABLE,
-        message: resolveAuthErrorMessage(parsed.code, parsed.message),
-        checkedValue: trimmed,
-      });
-    }
-  };
-
   const handleSubmit = async () => {
     const trimmed = nickname.trim();
     if (!trimmed) {
       setSubmitError("닉네임을 입력해 주세요.");
-      return;
-    }
-
-    if (
-      availability.status !== AvailabilityCheckStatus.AVAILABLE ||
-      availability.checkedValue !== trimmed
-    ) {
-      setSubmitError("닉네임 중복확인을 완료해 주세요.");
       return;
     }
 
@@ -146,11 +87,16 @@ export default function NicknameOnboardingPage() {
     try {
       await updateProfile({
         name: summary.name,
+        nickname: trimmed,
         displayName: trimmed,
         bio: summary.profile.bio,
         avatarUrl: summary.profile.avatarUrl,
         websiteUrl: summary.profile.websiteUrl,
         location: summary.profile.location,
+      });
+      updateUser({
+        nickname: trimmed,
+        displayName: trimmed,
       });
 
       markNicknameOnboardingCompleted(user?.id);
@@ -192,43 +138,11 @@ export default function NicknameOnboardingPage() {
             onChange={(event) => {
               setNickname(event.target.value);
               setSubmitError(null);
-              setAvailability((previous) =>
-                previous.checkedValue === event.target.value.trim()
-                  ? previous
-                  : IDLE_STATE,
-              );
             }}
             maxLength={30}
             placeholder="서비스에서 보여질 이름"
             disabled={isUpdatingProfile}
           />
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void handleCheckAvailability();
-            }}
-            isLoading={availability.status === AvailabilityCheckStatus.CHECKING}
-            disabled={isUpdatingProfile || nickname.trim().length === 0}
-          >
-            닉네임 중복확인
-          </Button>
-
-          {availability.message ? (
-            <p
-              className={[
-                "text-sm",
-                availability.status === AvailabilityCheckStatus.AVAILABLE
-                  ? "text-emerald-600 dark:text-emerald-300"
-                  : availability.status === AvailabilityCheckStatus.UNAVAILABLE
-                    ? "text-rose-600 dark:text-rose-300"
-                    : "text-slate-500 dark:text-slate-400",
-              ].join(" ")}
-            >
-              {availability.message}
-            </p>
-          ) : null}
 
           {submitError ? (
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200">

@@ -25,6 +25,7 @@ export type AuthContextValue = {
   login: (username: string, password: string) => Promise<AuthResponse>;
   loginWithToken: (token: string) => Promise<User>;
   refreshUser: () => Promise<User | null>;
+  updateUser: (nextUser: Partial<User> | User | null) => void;
   register: (
     username: string,
     name: string,

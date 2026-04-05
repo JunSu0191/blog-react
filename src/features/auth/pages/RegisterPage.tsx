@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ThemeToggle, Input, Button } from "@/shared/ui";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { useAuthContext } from "@/shared/context/useAuthContext";
 import { parseApiError } from "@/lib/apiError";
 import {
-  checkNicknameAvailability,
   checkUsernameAvailability,
   completeSocialSignup,
   getPendingSocialSignup,
@@ -24,7 +23,6 @@ import {
 } from "../types/auth.form";
 import { resolveAuthErrorMessage } from "../constants/errorMessages";
 import UsernameCheckField from "../components/UsernameCheckField";
-import NicknameCheckField from "../components/NicknameCheckField";
 import OtpVerificationPanel from "../components/OtpVerificationPanel";
 import { useOtpFlow } from "../hooks/useOtpFlow";
 import {
@@ -88,10 +86,10 @@ export default function RegisterPage() {
   const [isLoadingPendingProfile, setIsLoadingPendingProfile] = useState(false);
   const [pendingProvider, setPendingProvider] = useState("");
   const [pendingName, setPendingName] = useState("");
+  const [compositionMessage, setCompositionMessage] = useState("");
+  const isComposingRef = useRef(false);
 
   const [usernameCheckState, setUsernameCheckState] =
-    useState(toIdleAvailabilityState);
-  const [nicknameCheckState, setNicknameCheckState] =
     useState(toIdleAvailabilityState);
 
   const otpFlow = useOtpFlow({
@@ -163,8 +161,27 @@ export default function RegisterPage() {
     !isSubmitting &&
     !isLoadingPendingProfile &&
     hasAvailabilityCheckPassed(usernameCheckState, form.username) &&
-    hasAvailabilityCheckPassed(nicknameCheckState, form.nickname) &&
     (isSocialSignupMode || isVerificationDone);
+
+  const handleCompositionStart = () => {
+    isComposingRef.current = true;
+    setCompositionMessage("");
+  };
+
+  const handleCompositionEnd = () => {
+    isComposingRef.current = false;
+    setCompositionMessage("");
+  };
+
+  const handleFormKeyDownCapture = (
+    event: React.KeyboardEvent<HTMLFormElement>,
+  ) => {
+    if (!isComposingRef.current) return;
+    if (event.key !== "Tab" && event.key !== "Enter") return;
+
+    event.preventDefault();
+    setCompositionMessage("한글 입력이 확정된 뒤 다음 칸으로 이동할 수 있습니다.");
+  };
 
   const handleUsernameChange = (value: string) => {
     setForm((previous) => ({ ...previous, username: value }));
@@ -176,9 +193,6 @@ export default function RegisterPage() {
 
   const handleNicknameChange = (value: string) => {
     setForm((previous) => ({ ...previous, nickname: value }));
-    setNicknameCheckState((previous) =>
-      resetAvailabilityIfValueChanged(previous, value),
-    );
     setFormErrors((previous) => stripError(previous, ["nickname", "submit"]));
   };
 
@@ -275,49 +289,6 @@ export default function RegisterPage() {
     }
   };
 
-  const handleNicknameCheck = async () => {
-    const nickname = form.nickname.trim();
-    const required = validateRequiredText(nickname, "닉네임을 입력해 주세요.");
-    if (!required.valid) {
-      setNicknameCheckState({
-        status: AvailabilityCheckStatus.UNAVAILABLE,
-        message: required.message,
-        checkedValue: undefined,
-      });
-      return;
-    }
-
-    setNicknameCheckState({
-      status: AvailabilityCheckStatus.CHECKING,
-      message: "닉네임 사용 가능 여부를 확인 중입니다.",
-      checkedValue: nickname,
-    });
-
-    try {
-      const result = await checkNicknameAvailability({ nickname });
-      if (result.available) {
-        setNicknameCheckState({
-          status: AvailabilityCheckStatus.AVAILABLE,
-          message: "사용 가능한 닉네임입니다.",
-          checkedValue: nickname,
-        });
-      } else {
-        setNicknameCheckState({
-          status: AvailabilityCheckStatus.UNAVAILABLE,
-          message: resolveAuthErrorMessage(AuthErrorCode.DUPLICATE_NICKNAME),
-          checkedValue: nickname,
-        });
-      }
-    } catch (caughtError) {
-      const parsed = parseApiError(caughtError);
-      setNicknameCheckState({
-        status: AvailabilityCheckStatus.UNAVAILABLE,
-        message: resolveAuthErrorMessage(parsed.code, parsed.message),
-        checkedValue: nickname,
-      });
-    }
-  };
-
   const handleSendVerificationCode = async () => {
     const normalizedPhone = normalizePhoneNumber(form.phoneNumber);
     if (!isValidPhoneNumber(normalizedPhone)) {
@@ -378,6 +349,14 @@ export default function RegisterPage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    if (isComposingRef.current) {
+      setFormErrors((previous) => ({
+        ...previous,
+        submit: "한글 입력 조합이 끝난 뒤 다시 시도해 주세요.",
+      }));
+      return;
+    }
 
     if (isSocialSignupMode && !signupToken) {
       setFormErrors((previous) => ({
@@ -461,10 +440,6 @@ export default function RegisterPage() {
       nextErrors.username = "아이디 중복확인을 완료해 주세요.";
     }
 
-    if (!hasAvailabilityCheckPassed(nicknameCheckState, form.nickname)) {
-      nextErrors.nickname = "닉네임 중복확인을 완료해 주세요.";
-    }
-
     if (
       !isSocialSignupMode &&
       isPhoneVerificationEnabled &&
@@ -540,13 +515,6 @@ export default function RegisterPage() {
           checkedValue: normalizedUsername,
         });
         setFormErrors((previous) => ({ ...previous, username: userMessage }));
-      } else if (parsed.code === AuthErrorCode.DUPLICATE_NICKNAME) {
-        setNicknameCheckState({
-          status: AvailabilityCheckStatus.UNAVAILABLE,
-          message: userMessage,
-          checkedValue: form.nickname.trim(),
-        });
-        setFormErrors((previous) => ({ ...previous, nickname: userMessage }));
       } else {
         setFormErrors((previous) => ({ ...previous, submit: userMessage }));
       }
@@ -596,8 +564,8 @@ export default function RegisterPage() {
           {isSocialSignupMode
             ? "소셜 계정 인증은 완료되었습니다. 블로그에서 사용할 아이디와 닉네임을 입력해 주세요."
             : isPhoneVerificationEnabled
-            ? "아이디/닉네임 중복확인과 휴대폰 인증을 완료해야 가입할 수 있습니다."
-            : "아이디/닉네임 중복확인만 완료하면 회원가입할 수 있습니다."}
+            ? "아이디 중복확인과 휴대폰 인증을 완료해야 가입할 수 있습니다."
+            : "아이디 중복확인만 완료하면 회원가입할 수 있습니다."}
         </p>
 
         {formErrors.submit ? (
@@ -606,7 +574,11 @@ export default function RegisterPage() {
           </div>
         ) : null}
 
-        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+        <form
+          className="mt-6 space-y-4"
+          onSubmit={handleSubmit}
+          onKeyDownCapture={handleFormKeyDownCapture}
+        >
           <UsernameCheckField
             value={form.username}
             onChange={handleUsernameChange}
@@ -615,17 +587,34 @@ export default function RegisterPage() {
             }}
             state={usernameCheckState}
             disabled={isSubmitting}
+            inputProps={{
+              autoCapitalize: "none",
+              autoCorrect: "off",
+              spellCheck: false,
+              onCompositionStart: handleCompositionStart,
+              onCompositionEnd: handleCompositionEnd,
+            }}
           />
 
-          <NicknameCheckField
+          <Input
+            label="닉네임"
             value={form.nickname}
-            onChange={handleNicknameChange}
-            onCheck={() => {
-              void handleNicknameCheck();
-            }}
-            state={nicknameCheckState}
+            onChange={(event) => handleNicknameChange(event.target.value)}
+            placeholder="사용하실 닉네임을 입력해 주세요"
             disabled={isSubmitting}
+            error={formErrors.nickname}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
           />
+
+          {compositionMessage ? (
+            <p className="text-sm text-amber-600 dark:text-amber-300">
+              {compositionMessage}
+            </p>
+          ) : null}
 
           <Input
             label={isSocialSignupMode ? "이메일" : "이메일 (선택)"}
@@ -634,6 +623,9 @@ export default function RegisterPage() {
             placeholder="example@email.com"
             disabled={isSubmitting || isSocialSignupMode}
             error={formErrors.email}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
           />
 
           {!isSocialSignupMode ? (
@@ -714,6 +706,9 @@ export default function RegisterPage() {
                 placeholder="비밀번호를 입력해 주세요"
                 disabled={isSubmitting}
                 error={formErrors.password}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
               />
 
               <Input
@@ -724,6 +719,9 @@ export default function RegisterPage() {
                 placeholder="비밀번호를 다시 입력해 주세요"
                 disabled={isSubmitting}
                 error={formErrors.passwordConfirm}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </>
           ) : null}

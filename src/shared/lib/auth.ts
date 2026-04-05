@@ -1,6 +1,7 @@
 const TOKEN_KEY = "auth.token";
 const REFRESH_TOKEN_KEY = "auth.refreshToken";
 const USER_ID_KEY = "auth.userId";
+const USER_KEY = "auth.user";
 
 export function getToken(): string | null {
   try {
@@ -47,6 +48,22 @@ export function setUserId(userId: number) {
   } catch {}
 }
 
+export function getStoredUser<T = unknown>(): T | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUser(user: unknown) {
+  try {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch {}
+}
+
 export function clearToken() {
   try {
     localStorage.removeItem(TOKEN_KEY);
@@ -62,6 +79,12 @@ export function clearRefreshToken() {
 export function clearUserId() {
   try {
     localStorage.removeItem(USER_ID_KEY);
+  } catch {}
+}
+
+export function clearStoredUser() {
+  try {
+    localStorage.removeItem(USER_KEY);
   } catch {}
 }
 
@@ -159,6 +182,7 @@ export function clearAuthStorage() {
   clearToken();
   clearRefreshToken();
   clearUserId();
+  clearStoredUser();
 }
 
 export default {
@@ -171,6 +195,9 @@ export default {
   getUserId,
   setUserId,
   clearUserId,
+  getStoredUser,
+  setStoredUser,
+  clearStoredUser,
   getTokenExpiryMs,
   isTokenExpired,
   getUserIdFromToken,

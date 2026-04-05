@@ -1,3 +1,4 @@
+import type { InputHTMLAttributes } from "react";
 import { Button, Input } from "@/shared/ui";
 import {
   AvailabilityCheckStatus,
@@ -10,6 +11,7 @@ type UsernameCheckFieldProps = {
   onCheck: () => void;
   state: AvailabilityFieldState;
   disabled?: boolean;
+  inputProps?: InputHTMLAttributes<HTMLInputElement>;
 };
 
 function resolveMessageColor(status: AvailabilityFieldState["status"]) {
@@ -31,6 +33,7 @@ export default function UsernameCheckField({
   onCheck,
   state,
   disabled = false,
+  inputProps,
 }: UsernameCheckFieldProps) {
   const isChecking = state.status === AvailabilityCheckStatus.CHECKING;
 
@@ -43,6 +46,7 @@ export default function UsernameCheckField({
           onChange={(event) => onChange(event.target.value)}
           placeholder="영문/숫자 아이디"
           disabled={disabled || isChecking}
+          {...inputProps}
         />
         <Button
           type="button"

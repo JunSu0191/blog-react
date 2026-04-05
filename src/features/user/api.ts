@@ -98,26 +98,58 @@ function normalizeStatus(value: unknown): UserStatus | undefined {
 function normalizeAuthUser(raw: unknown): AuthUser | undefined {
   const obj = toObject(raw);
   if (!obj) return undefined;
+  const nestedUser =
+    toObject(obj.user) ??
+    toObject(obj.member) ??
+    toObject(obj.account);
+  const profile =
+    toObject(obj.profile) ??
+    toObject(nestedUser?.profile);
 
-  const id = toFiniteNumber(obj.id) ?? toFiniteNumber(obj.userId);
+  const id =
+    toFiniteNumber(obj.id) ??
+    toFiniteNumber(obj.userId) ??
+    toFiniteNumber(nestedUser?.id) ??
+    toFiniteNumber(nestedUser?.userId);
   if (typeof id !== "number") return undefined;
 
-  const username = toText(obj.username) || `user-${id}`;
-  const name = toText(obj.name) || toText(obj.displayName) || username;
+  const username =
+    toText(obj.username) ??
+    toText(nestedUser?.username) ??
+    `user-${id}`;
   const nickname =
     toText(obj.nickname) ??
     toText(obj.nickName) ??
+    toText(nestedUser?.nickname) ??
+    toText(nestedUser?.nickName) ??
+    toText(profile?.nickname) ??
+    toText(profile?.nickName) ??
     toText(obj.displayName);
   const displayName =
     toText(obj.displayName) ??
     toText(obj.display_name) ??
+    toText(nestedUser?.displayName) ??
+    toText(nestedUser?.display_name) ??
+    toText(profile?.displayName) ??
+    toText(profile?.display_name) ??
     toText(obj.nickname) ??
     toText(obj.nickName);
+  const name =
+    toText(obj.name) ??
+    toText(nestedUser?.name) ??
+    toText(profile?.name) ??
+    toText(obj.displayName) ??
+    toText(nestedUser?.displayName) ??
+    username;
   const authProvider =
     toText(obj.authProvider) ??
     toText(obj.oauthProvider) ??
     toText(obj.socialProvider) ??
-    toText(obj.provider);
+    toText(obj.provider) ??
+    toText(nestedUser?.authProvider) ??
+    toText(nestedUser?.oauthProvider) ??
+    toText(nestedUser?.socialProvider) ??
+    toText(nestedUser?.provider);
   const signupCompleted =
     toBoolean(obj.signupCompleted) ??
     toBoolean(obj.signup_completed);
@@ -136,7 +168,10 @@ function normalizeAuthUser(raw: unknown): AuthUser | undefined {
     name,
     nickname,
     displayName,
-    email: toText(obj.email),
+    email:
+      toText(obj.email) ??
+      toText(nestedUser?.email) ??
+      toText(profile?.email),
     authProvider,
     signupCompleted,
     needsProfileSetup,
