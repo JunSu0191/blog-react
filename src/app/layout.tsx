@@ -40,6 +40,7 @@ import {
   useNotificationSummary,
   useNotifications,
 } from "@/features/notifications";
+import { resolveDisplayName } from "@/shared/lib/displayName";
 
 interface MenuItem {
   label: string;
@@ -137,8 +138,9 @@ export default function Layout({
   children,
   menuItems = defaultMenuItems,
 }: LayoutProps) {
-  const { logout, user } = useAuthContext();
+  const { logout, token, user, isLoadingUser } = useAuthContext();
   const isAuthenticated = Boolean(user);
+  const isRestoringSession = Boolean(token) && !user && isLoadingUser;
   const navigate = useNavigate();
   const location = useLocation();
   const currentUserId =
@@ -147,9 +149,8 @@ export default function Layout({
   const { data: notificationSummary } = useNotificationSummary(isAuthenticated);
   const { data: chatUnreadCount = 0 } = useChatTotalUnreadCount(currentUserId);
   const userDisplayName = useMemo(() => {
-    const name = typeof user?.name === "string" ? user.name.trim() : "";
-    return name || "로그인 사용자";
-  }, [user?.name]);
+    return resolveDisplayName(user || {}, "로그인 사용자");
+  }, [user]);
   const myBlogPath = useMemo(() => {
     const username = typeof user?.username === "string" ? user.username.trim() : "";
     return username ? `/${encodeURIComponent(username)}` : "/login";
@@ -438,6 +439,17 @@ export default function Layout({
                   로그아웃
                 </Button>
               </>
+            ) : isRestoringSession ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                disabled
+              >
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                확인 중
+              </Button>
             ) : (
               <Button
                 type="button"
@@ -492,6 +504,16 @@ export default function Layout({
                   로그아웃
                 </Button>
               </>
+            ) : isRestoringSession ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-lg px-2.5 text-[11px]"
+                disabled
+              >
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              </Button>
             ) : (
               <Button
                 type="button"

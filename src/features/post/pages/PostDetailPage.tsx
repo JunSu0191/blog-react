@@ -6,6 +6,7 @@ import { ActionDialog, Button, TagChip } from '@/shared/ui';
 import { useAuthContext } from '@/shared/context/useAuthContext';
 import { useThemeContext } from '@/shared/context/ThemeProvider';
 import { cn } from '@/shared/lib/cn';
+import { resolveDisplayName } from '@/shared/lib/displayName';
 import { parseErrorMessage } from '@/shared/lib/errorParser';
 import {
   bottomSheetHeaderClassName,
@@ -127,11 +128,7 @@ export default function PostDetailPage() {
 
   const previousPost = post?.previousPost || null;
   const nextPost = post?.nextPost || null;
-  const authorName =
-    post?.author?.nickname ||
-    post?.author?.name ||
-    post?.author?.username ||
-    '익명';
+  const authorName = resolveDisplayName(post?.author || {}, '익명');
   const authorUsername = post?.author?.username?.trim() || '';
   const authorBlogPath = authorUsername
     ? `/${encodeURIComponent(authorUsername)}`

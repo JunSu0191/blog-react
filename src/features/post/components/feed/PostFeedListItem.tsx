@@ -7,6 +7,7 @@ import {
   CarouselContent,
   CarouselItem,
 } from "@/components/ui/carousel";
+import { resolveDisplayName } from "@/shared/lib/displayName";
 import { TagChip } from "@/shared/ui";
 
 export type FeedPostCardData = {
@@ -80,8 +81,7 @@ function formatRelativeTime(value?: string) {
 }
 
 function resolveAuthorName(post: FeedPostCardData) {
-  const author = post.author;
-  return author?.nickname || author?.name || author?.username || "익명";
+  return resolveDisplayName(post.author || {}, "익명");
 }
 
 function resolveAuthorProfilePath(post: FeedPostCardData) {

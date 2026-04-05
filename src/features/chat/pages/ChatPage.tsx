@@ -9,6 +9,7 @@ import {
   getUserIdFromToken,
   setUserId,
 } from "@/shared/lib/auth";
+import { resolveDisplayName } from "@/shared/lib/displayName";
 import { parseErrorMessage } from "@/shared/lib/errorParser";
 import { unsubscribeChat } from "@/shared/socket/stompClient";
 import SurfaceCard from "@/shared/ui/SurfaceCard";
@@ -198,7 +199,7 @@ function toActionErrorMessage(error: unknown, fallback: string) {
 }
 
 function userLabel(user: ChatUserLike) {
-  return user.nickname || user.name || `사용자 ${user.userId}`;
+  return resolveDisplayName(user, `사용자 ${user.userId}`);
 }
 
 function userSubLabel(user: ChatUserLike) {

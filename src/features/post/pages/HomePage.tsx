@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Compass, LibraryBig, Sparkles, Tags, TrendingUp } from "lucide-react";
 import { Badge, Card, CardContent, CardHeader } from "@/components/ui";
+import { resolveDisplayName } from "@/shared/lib/displayName";
 import { Button, TagChip } from "@/shared/ui";
 import PostFeedListItem from "../components/feed/PostFeedListItem";
 import { usePostCategories, usePostFeed } from "../queries";
@@ -73,8 +74,7 @@ export default function HomePage() {
     >();
 
     posts.forEach((post) => {
-      const authorName =
-        post.author?.nickname || post.author?.name || post.author?.username;
+      const authorName = resolveDisplayName(post.author || {}, "");
       if (!authorName) return;
       const key = post.author?.username || authorName;
       const previous = authorMap.get(key);

@@ -7,6 +7,7 @@ import {
 import { Link } from "react-router-dom";
 import { Check, Palette } from "lucide-react";
 import { useAuthContext } from "@/shared/context/useAuthContext";
+import { resolveDisplayName } from "@/shared/lib/displayName";
 import { parseErrorMessage } from "@/shared/lib/errorParser";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { Button, Input, Select } from "@/shared/ui";
@@ -119,7 +120,7 @@ export default function BlogCustomizePage() {
   const previewStyle = {
     "--blog-accent": normalizeHexColor(form.accentColor),
   } as CSSProperties;
-  const previewName = user?.name?.trim() || user?.username || "Blog Pause";
+  const previewName = resolveDisplayName(user || {}, "Blog Pause");
   const previewInitial = previewName.slice(0, 1).toUpperCase() || "B";
 
   const saveDisabled =

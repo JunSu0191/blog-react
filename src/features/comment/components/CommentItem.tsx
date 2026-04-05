@@ -5,6 +5,7 @@ import { ActionDialog, Button } from "@/shared/ui";
 import useActionDialog from "@/shared/hooks/useActionDialog";
 import { useAuthContext } from "@/shared/context/useAuthContext";
 import { isUnauthorizedError } from "@/shared/lib/api";
+import { resolveDisplayName } from "@/shared/lib/displayName";
 import { CommentReactionButtons } from "@/features/social";
 import { useDeleteComment, useUpdateComment } from "../queries";
 import type { CommentResponse } from "../api";
@@ -49,7 +50,7 @@ export default function CommentItem({
   const isOwner =
     typeof currentUserId === "number" && currentUserId === comment.userId;
   const isReply = depth > 0;
-  const authorName = comment.name || "익명";
+  const authorName = resolveDisplayName(comment, "익명");
   const authorUsername = comment.username?.trim() || "";
   const authorBlogPath = authorUsername
     ? `/${encodeURIComponent(authorUsername)}`

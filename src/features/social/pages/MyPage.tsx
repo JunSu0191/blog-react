@@ -9,6 +9,7 @@ import {
   StatCard,
   SurfaceCard,
 } from "@/shared/ui";
+import { resolveDisplayName } from "@/shared/lib/displayName";
 import { showErrorToast } from "@/shared/lib/errorToast";
 import { Badge } from "@/components/ui";
 import { useBookmarkedPosts } from "@/features/post/queries";
@@ -66,8 +67,18 @@ export default function MyPage() {
     websiteUrl: "",
     location: "",
   });
-  const avatarLabel =
-    summary?.profile.displayName || summary?.name || summary?.username || "U";
+  const visibleDisplayName = useMemo(() => {
+    if (!summary) return "U";
+    return resolveDisplayName(
+      {
+        displayName: summary.profile.displayName,
+        name: summary.name,
+        username: summary.username,
+      },
+      "U",
+    );
+  }, [summary]);
+  const avatarLabel = visibleDisplayName;
   const bookmarkedPostsQuery = useBookmarkedPosts(bookmarkedPostIds);
 
   useEffect(() => {
@@ -180,13 +191,16 @@ export default function MyPage() {
             )}
             <div className="min-w-0">
               <p className="line-clamp-1 text-xl font-black text-slate-900 dark:text-slate-100">
-                {summary.name}
+                {visibleDisplayName}
               </p>
-              {summary.profile.displayName && (
+              <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                아이디/핸들 @{summary.username}
+              </p>
+              {summary.name && summary.name !== visibleDisplayName ? (
                 <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  {summary.profile.displayName}
+                  이름 {summary.name}
                 </p>
-              )}
+              ) : null}
               {summary.profile.bio && (
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">
                   {summary.profile.bio}
@@ -278,7 +292,7 @@ export default function MyPage() {
               onChange={(event) =>
                 handleProfileFieldChange("displayName", event.target.value)
               }
-              placeholder="표시 이름"
+              placeholder="닉네임 (표시 이름)"
             />
             <Input
               value={profileForm.avatarUrl ?? ""}
@@ -610,7 +624,8 @@ export default function MyPage() {
               </p>
               <div className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
                 <p>이름: {summary.name}</p>
-                <p>표시 이름: {summary.profile.displayName || "-"}</p>
+                <p>닉네임: {summary.profile.displayName || "-"}</p>
+                <p>아이디/핸들: @{summary.username}</p>
                 <p>웹사이트: {summary.profile.websiteUrl || "-"}</p>
                 <p>위치: {summary.profile.location || "-"}</p>
               </div>

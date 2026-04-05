@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { useParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ApiError } from "@/shared/lib/api";
+import { resolveDisplayName } from "@/shared/lib/displayName";
 import { Button, Input, Select } from "@/shared/ui";
 import PostFeedListItem, {
   type FeedPostCardData,
@@ -93,15 +94,6 @@ function isBlogProfileNotFound(error: ApiError | null | undefined) {
 
   const code = resolveErrorCode(error);
   return code === null || code === "blog_profile_not_found";
-}
-
-function resolveProfileName(
-  displayName?: string,
-  name?: string,
-  nickname?: string,
-  username?: string,
-) {
-  return displayName || name || nickname || username || "Unknown";
 }
 
 function normalizeThemePreset(value: string): BlogThemePreset {
@@ -258,11 +250,14 @@ export default function BlogProfilePage() {
     return null;
   }
 
-  const profileName = resolveProfileName(
-    profileData.profile.displayName,
-    profileData.user.name,
-    profileData.user.nickname,
-    profileData.user.username,
+  const profileName = resolveDisplayName(
+    {
+      displayName: profileData.profile.displayName,
+      name: profileData.user.name,
+      nickname: profileData.user.nickname,
+      username: profileData.user.username,
+    },
+    "Unknown",
   );
 
   const avatarInitial = profileName.slice(0, 1).toUpperCase();

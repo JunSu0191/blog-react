@@ -24,6 +24,8 @@ export interface CommentResponse {
   postId: number;
   userId: number;
   name: string;
+  nickname?: string;
+  displayName?: string;
   username?: string;
   parentId: number | null;
   content: string;
@@ -59,6 +61,40 @@ function normalizeCommentResponse(raw: unknown): CommentResponse {
     obj.user && typeof obj.user === "object"
       ? (obj.user as Record<string, unknown>)
       : null;
+  const username =
+    typeof obj.username === "string"
+      ? obj.username
+      : typeof obj.userName === "string"
+        ? obj.userName
+        : typeof nestedUser?.username === "string"
+          ? nestedUser.username
+          : undefined;
+  const nickname =
+    typeof obj.nickname === "string"
+      ? obj.nickname
+      : typeof obj.nickName === "string"
+        ? obj.nickName
+        : typeof nestedUser?.nickname === "string"
+          ? nestedUser.nickname
+          : typeof nestedUser?.nickName === "string"
+            ? nestedUser.nickName
+            : undefined;
+  const displayName =
+    typeof obj.displayName === "string"
+      ? obj.displayName
+      : typeof obj.display_name === "string"
+        ? obj.display_name
+        : typeof nestedUser?.displayName === "string"
+          ? nestedUser.displayName
+          : typeof nestedUser?.display_name === "string"
+            ? nestedUser.display_name
+            : undefined;
+  const name =
+    typeof obj.name === "string"
+      ? obj.name
+      : typeof nestedUser?.name === "string"
+        ? nestedUser.name
+        : nickname || displayName || username || "익명";
   const rawReaction = typeof obj.myReaction === "string" ? obj.myReaction.toUpperCase() : null;
   const myReaction =
     rawReaction === "LIKE" || rawReaction === "DISLIKE" || rawReaction === "NONE"
@@ -69,28 +105,10 @@ function normalizeCommentResponse(raw: unknown): CommentResponse {
     id: toFiniteNumber(obj.id) ?? 0,
     postId: toFiniteNumber(obj.postId) ?? 0,
     userId: toFiniteNumber(obj.userId) ?? 0,
-    name:
-      typeof obj.name === "string"
-        ? obj.name
-        : typeof obj.nickname === "string"
-          ? obj.nickname
-          : typeof obj.username === "string"
-            ? obj.username
-            : typeof nestedUser?.name === "string"
-              ? nestedUser.name
-              : typeof nestedUser?.nickname === "string"
-                ? nestedUser.nickname
-                : typeof nestedUser?.username === "string"
-                  ? nestedUser.username
-                  : "익명",
-    username:
-      typeof obj.username === "string"
-        ? obj.username
-        : typeof obj.userName === "string"
-          ? obj.userName
-          : typeof nestedUser?.username === "string"
-            ? nestedUser.username
-            : undefined,
+    name,
+    nickname,
+    displayName,
+    username,
     parentId:
       typeof toFiniteNumber(obj.parentId) === "number"
         ? (toFiniteNumber(obj.parentId) as number)
