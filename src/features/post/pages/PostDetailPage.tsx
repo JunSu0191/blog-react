@@ -1,18 +1,11 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
 import { Bookmark, BookmarkCheck, ChevronDown, Link2, MessageCircle, Send, Trash2, X } from 'lucide-react';
 import { ActionDialog, Button, TagChip } from '@/shared/ui';
 import { useAuthContext } from '@/shared/context/useAuthContext';
-import { useThemeContext } from '@/shared/context/ThemeProvider';
-import { cn } from '@/shared/lib/cn';
 import { resolveDisplayName } from '@/shared/lib/displayName';
 import { parseErrorMessage } from '@/shared/lib/errorParser';
-import {
-  bottomSheetHeaderClassName,
-  bottomSheetOverlayClassName,
-  bottomSheetPanelClassName,
-} from '@/shared/ui/bottomSheetStyles';
 import { useToast } from '@/shared/ui/ToastProvider';
 import { CommentList } from '@/features/comment';
 import type { CommentResponse } from '@/features/comment/api';
@@ -27,6 +20,36 @@ import {
   resolvePostPath,
   sanitizeHtml,
 } from '../utils/postContent';
+
+const MOBILE_BREAKPOINT = 1024;
+
+function useIsMobilePostLayout() {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    setIsMobile(mediaQuery.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsMobile(event.matches);
+    };
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  return isMobile;
+}
 
 function formatDate(value?: string) {
   if (!value) return '날짜 정보 없음';
@@ -67,8 +90,8 @@ function summarizePost(contentHtml: string, subtitle?: string) {
 export default function PostDetailPage() {
   const navigate = useNavigate();
   const {user} = useAuthContext();
-  const {theme} = useThemeContext();
   const {success, error} = useToast();
+  const isMobile = useIsMobilePostLayout();
   const params = useParams<{ postId?: string }>();
   const rawPostId = Number(params.postId);
   const postId =
@@ -86,12 +109,11 @@ export default function PostDetailPage() {
   const deletePostMutation = useDeletePost();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDesktopCommentOpen, setIsDesktopCommentOpen] = useState(true);
-  const [isMobileCommentSheetMounted, setIsMobileCommentSheetMounted] = useState(false);
-  const [isMobileCommentSheetActive, setIsMobileCommentSheetActive] = useState(false);
+  const [isMobileCommentSheetOpen, setIsMobileCommentSheetOpen] = useState(false);
   const [isMobileSheetDragging, setIsMobileSheetDragging] = useState(false);
   const [mobileSheetDragY, setMobileSheetDragY] = useState(0);
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const closeSheetTimerRef = useRef<number | null>(null);
+  const [lockedPageOffsetY, setLockedPageOffsetY] = useState<number | null>(null);
   const dragStartYRef = useRef<number | null>(null);
   const dragDistanceRef = useRef(0);
   const lockedScrollYRef = useRef(0);
@@ -101,11 +123,28 @@ export default function PostDetailPage() {
     () => countTotalComments(commentsQuery.data || []),
     [commentsQuery.data],
   );
-  const commentSheetTransitionMs = 280;
   const postSummary = useMemo(
     () => summarizePost(post?.contentHtml || '', post?.subtitle),
     [post?.contentHtml, post?.subtitle],
   );
+  const isMobileCommentOpen = isMobile && isMobileCommentSheetOpen;
+  const mobileSheetInlineStyle =
+    isMobile && (isMobileSheetDragging || mobileSheetDragY > 0)
+      ? {
+          transform: `translateY(${mobileSheetDragY}px)`,
+          transitionDuration: isMobileSheetDragging ? '0ms' : '200ms',
+        }
+      : undefined;
+  const mobileCommentPageLockStyle =
+    isMobileCommentOpen && lockedPageOffsetY !== null
+      ? {
+          position: 'fixed' as const,
+          inset: '0',
+          top: `${-lockedPageOffsetY}px`,
+          width: '100%',
+          overflow: 'hidden',
+        }
+      : undefined;
 
   const contentHtmlWithHeadingIds = useMemo(() => {
     if (!post) return '';
@@ -144,47 +183,22 @@ export default function PostDetailPage() {
     user.id === authorId;
   const canManagePost = Boolean(user) && (isAdmin || isAuthor);
 
-  const openMobileCommentSheet = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    if (closeSheetTimerRef.current !== null) {
-      window.clearTimeout(closeSheetTimerRef.current);
-      closeSheetTimerRef.current = null;
-    }
-    setIsMobileCommentSheetMounted(true);
-    setIsMobileCommentSheetActive(false);
-    setIsMobileSheetDragging(false);
-    setMobileSheetDragY(0);
-    window.requestAnimationFrame(() => {
-      setIsMobileCommentSheetActive(true);
-    });
-  }, []);
-
-  const closeMobileCommentSheet = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    if (!isMobileCommentSheetMounted) return;
-
-    setIsMobileCommentSheetActive(false);
-    setIsMobileSheetDragging(false);
-    setMobileSheetDragY(0);
+  const resetMobileCommentSheetDrag = useCallback(() => {
     dragStartYRef.current = null;
     dragDistanceRef.current = 0;
-
-    if (closeSheetTimerRef.current !== null) {
-      window.clearTimeout(closeSheetTimerRef.current);
-    }
-    closeSheetTimerRef.current = window.setTimeout(() => {
-      setIsMobileCommentSheetMounted(false);
-      closeSheetTimerRef.current = null;
-    }, commentSheetTransitionMs);
-  }, [commentSheetTransitionMs, isMobileCommentSheetMounted]);
-
-  useEffect(() => {
-    return () => {
-      if (closeSheetTimerRef.current !== null) {
-        window.clearTimeout(closeSheetTimerRef.current);
-      }
-    };
+    setIsMobileSheetDragging(false);
+    setMobileSheetDragY(0);
   }, []);
+
+  const openMobileCommentSheet = useCallback(() => {
+    resetMobileCommentSheetDrag();
+    setIsMobileCommentSheetOpen(true);
+  }, [resetMobileCommentSheetDrag]);
+
+  const closeMobileCommentSheet = useCallback(() => {
+    resetMobileCommentSheetDrag();
+    setIsMobileCommentSheetOpen(false);
+  }, [resetMobileCommentSheetDrag]);
 
   useEffect(() => {
     if (typeof postId !== 'number') return;
@@ -194,41 +208,34 @@ export default function PostDetailPage() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     if (typeof window === 'undefined') return;
-    if (!isMobileCommentSheetMounted) return;
+    if (!isMobileCommentOpen) return;
 
     const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevBodyOverflow = document.body.style.overflow;
     const prevHtmlOverscroll = document.documentElement.style.overscrollBehavior;
     const prevBodyOverscroll = document.body.style.overscrollBehavior;
-    const prevBodyPosition = document.body.style.position;
-    const prevBodyTop = document.body.style.top;
-    const prevBodyWidth = document.body.style.width;
 
     lockedScrollYRef.current = window.scrollY;
+    setLockedPageOffsetY(lockedScrollYRef.current);
 
     document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'none';
     document.body.style.overflow = 'hidden';
     document.body.style.overscrollBehavior = 'none';
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${lockedScrollYRef.current}px`;
-    document.body.style.width = '100%';
 
     return () => {
+      setLockedPageOffsetY(null);
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.documentElement.style.overscrollBehavior = prevHtmlOverscroll;
       document.body.style.overflow = prevBodyOverflow;
       document.body.style.overscrollBehavior = prevBodyOverscroll;
-      document.body.style.position = prevBodyPosition;
-      document.body.style.top = prevBodyTop;
-      document.body.style.width = prevBodyWidth;
       window.scrollTo({ top: lockedScrollYRef.current, behavior: 'auto' });
     };
-  }, [isMobileCommentSheetMounted]);
+  }, [isMobileCommentOpen]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    if (!isMobileCommentSheetMounted) return;
+    if (!isMobileCommentOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -240,7 +247,34 @@ export default function PostDetailPage() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [closeMobileCommentSheet, isMobileCommentSheetMounted]);
+  }, [closeMobileCommentSheet, isMobileCommentOpen]);
+
+  const handleMobileSheetTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobile || event.touches.length !== 1) return;
+    dragStartYRef.current = event.touches[0].clientY;
+    dragDistanceRef.current = 0;
+  };
+
+  const handleMobileSheetTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobile || dragStartYRef.current === null) return;
+    const delta = event.touches[0].clientY - dragStartYRef.current;
+    const next = Math.max(0, delta);
+    if (next <= 0) return;
+    if (!isMobileSheetDragging) {
+      setIsMobileSheetDragging(true);
+    }
+    dragDistanceRef.current = next;
+    setMobileSheetDragY(next);
+  };
+
+  const handleMobileSheetTouchEnd = () => {
+    if (!isMobile || dragStartYRef.current === null) return;
+    const shouldClose = dragDistanceRef.current > 96;
+    resetMobileCommentSheetDrag();
+    if (shouldClose) {
+      closeMobileCommentSheet();
+    }
+  };
 
   if (typeof postId !== 'number') {
     return (
@@ -331,102 +365,59 @@ export default function PostDetailPage() {
   };
 
   const mobileCommentSheet =
-    isMobileCommentSheetMounted && typeof document !== 'undefined'
+    isMobileCommentOpen && typeof document !== 'undefined'
         ? createPortal(
-          <div className={cn('fixed inset-0 z-[170] bg-transparent lg:hidden', theme === 'dark' && 'dark')}>
-            <button
-              type='button'
-              aria-label='댓글 모달 닫기'
+          <div className='fixed inset-0 z-[180] flex items-end justify-center p-0 sm:items-center sm:p-4 lg:hidden'>
+            <div
+              aria-hidden='true'
               className={[
-                `absolute inset-0 appearance-none transition-opacity duration-300 ${bottomSheetOverlayClassName}`,
-                isMobileCommentSheetActive ? 'opacity-100' : 'opacity-0',
+                'absolute inset-0 bg-slate-900/45',
+                isMobile
+                  ? 'mobile-sheet-overlay-enter'
+                  : 'animate-in fade-in-0 duration-200 ease-out',
               ].join(' ')}
               onClick={closeMobileCommentSheet}
             />
-            <div className='absolute inset-x-0 bottom-0'>
-              <div
-                className={cn(
-                  'relative max-h-[80dvh] w-full overflow-hidden',
-                  bottomSheetPanelClassName,
-                  theme === 'dark'
-                    ? 'border-slate-700/80 bg-slate-950/94'
-                    : 'border-slate-200/80 bg-white/95',
-                  isMobileSheetDragging
-                    ? ''
-                    : 'transition-transform ease-out',
-                )}
-                style={{
-                  transform: `translateY(${isMobileCommentSheetActive ? mobileSheetDragY : 640}px)`,
-                  transitionDuration: isMobileSheetDragging
-                    ? '0ms'
-                    : `${commentSheetTransitionMs}ms`,
-                }}
-              >
+            <div
+              className={[
+                'relative w-full rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900',
+                isMobile
+                  ? (isMobileSheetDragging ? '' : 'mobile-sheet-enter')
+                  : 'animate-in fade-in-0 zoom-in-95 duration-200 ease-out',
+              ].join(' ')}
+              style={mobileSheetInlineStyle}
+            >
+              {isMobile && (
                 <div
-                  className={cn(
-                    'touch-none rounded-t-[28px] px-4 pt-2',
-                    bottomSheetHeaderClassName,
-                    theme === 'dark'
-                      ? 'border-slate-700/80 bg-slate-950/90'
-                      : 'border-slate-200/80 bg-white/92',
-                  )}
-                  onTouchStart={(event) => {
-                    if (event.touches.length !== 1) return;
-                    dragStartYRef.current = event.touches[0].clientY;
-                    dragDistanceRef.current = 0;
-                    setIsMobileSheetDragging(true);
-                  }}
-                  onTouchMove={(event) => {
-                    if (dragStartYRef.current === null) return;
-                    const delta = event.touches[0].clientY - dragStartYRef.current;
-                    const next = Math.max(0, delta);
-                    dragDistanceRef.current = next;
-                    setMobileSheetDragY(next);
-                  }}
-                  onTouchEnd={() => {
-                    if (dragStartYRef.current === null) return;
-                    const shouldClose = dragDistanceRef.current > 96;
-                    dragStartYRef.current = null;
-                    dragDistanceRef.current = 0;
-                    setIsMobileSheetDragging(false);
-                    if (shouldClose) {
-                      closeMobileCommentSheet();
-                      return;
-                    }
-                    setMobileSheetDragY(0);
-                  }}
-                  onTouchCancel={() => {
-                    dragStartYRef.current = null;
-                    dragDistanceRef.current = 0;
-                    setIsMobileSheetDragging(false);
-                    setMobileSheetDragY(0);
-                  }}
+                  className='mb-3 touch-none rounded-t-3xl bg-white px-4 pt-2 dark:bg-slate-900'
+                  onTouchStart={handleMobileSheetTouchStart}
+                  onTouchMove={handleMobileSheetTouchMove}
+                  onTouchEnd={handleMobileSheetTouchEnd}
+                  onTouchCancel={resetMobileCommentSheetDrag}
                 >
                   <div className='mx-auto h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600' />
                 </div>
-                <header
-                  className={cn(
-                    'sticky top-0 z-10 flex items-center justify-between px-4 py-3',
-                    bottomSheetHeaderClassName,
-                    'border-0',
-                    theme === 'dark' ? 'bg-slate-950/90' : 'bg-white/92',
-                  )}>
-                  <h2 className='text-sm font-black text-slate-900 dark:text-slate-100'>
-                    댓글
-                  </h2>
+              )}
+              <div className='space-y-3'>
+                <div className='mb-3 flex items-start justify-between gap-2'>
+                  <div>
+                    <p className='text-base font-black text-slate-900 dark:text-slate-100'>
+                      댓글
+                    </p>
+                    <p className='mt-1 text-xs text-slate-500 dark:text-slate-400'>
+                      댓글을 읽고 바로 참여할 수 있습니다.
+                    </p>
+                  </div>
                   <button
                     type='button'
-                    className='rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
+                    className='rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200'
                     onClick={closeMobileCommentSheet}
                   >
                     닫기
                   </button>
-                </header>
-                <div
-                  className={cn(
-                    'h-[calc(85dvh-3.4rem)] overflow-y-auto overscroll-contain p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]',
-                    theme === 'dark' ? 'bg-slate-950' : 'bg-white',
-                  )}>
+                </div>
+
+                <div className='max-h-[min(80dvh,calc(100dvh-6rem))] space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/70'>
                   <CommentList postId={post.id}/>
                 </div>
               </div>
@@ -437,7 +428,10 @@ export default function PostDetailPage() {
       : null;
 
   return (
-    <div className='route-enter relative space-y-6'>
+    <div
+      className='route-enter relative space-y-6'
+      style={mobileCommentPageLockStyle}
+    >
       <header
         className='overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:rounded-3xl'>
         {post.thumbnailUrl ? (
@@ -626,7 +620,7 @@ export default function PostDetailPage() {
                   <button
                     type='button'
                     onClick={() => {
-                      if (isMobileCommentSheetMounted) {
+                      if (isMobileCommentSheetOpen) {
                         closeMobileCommentSheet();
                         return;
                       }
@@ -643,9 +637,7 @@ export default function PostDetailPage() {
                       <ChevronDown
                         className={[
                           'h-3.5 w-3.5 transition-transform duration-200',
-                          isMobileCommentSheetMounted && isMobileCommentSheetActive
-                            ? 'rotate-180'
-                            : '',
+                          isMobileCommentSheetOpen ? 'rotate-180' : '',
                         ].join(' ')}
                       />
                     </span>

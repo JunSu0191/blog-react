@@ -92,7 +92,7 @@ export default function SearchPage() {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-4">
-          <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <CardContent className="p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -116,25 +116,25 @@ export default function SearchPage() {
           </Card>
 
           {!keyword ? (
-            <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+            <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <CardContent className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
                 홈에서 발견한 주제를 더 깊게 찾고 싶다면 키워드를 입력해 보세요.
               </CardContent>
             </Card>
           ) : feedQuery.isLoading ? (
-            <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+            <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <CardContent className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
                 검색 결과를 불러오는 중...
               </CardContent>
             </Card>
           ) : posts.length === 0 ? (
-            <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+            <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <CardContent className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
                 검색 결과가 없습니다. 다른 키워드나 카테고리로 시도해 보세요.
               </CardContent>
             </Card>
           ) : (
-            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <div className="divide-y divide-slate-200 dark:divide-slate-800">
                 {posts.map((post) => (
                   <PostFeedListItem
@@ -150,18 +150,18 @@ export default function SearchPage() {
         </div>
 
         <aside className="space-y-4">
-          <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <CardHeader className="pb-2">
-              <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+              <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-slate-100">
                 추천 카테고리
-              </p>
+              </div>
             </CardHeader>
             <CardContent className="grid gap-2">
               {(categoriesQuery.data ?? []).slice(0, 6).map((category) => (
                 <Link
                   key={category.id}
                   to={`/categories/${category.id}`}
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
                 >
                   {category.name}
                 </Link>
@@ -169,11 +169,11 @@ export default function SearchPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <CardHeader className="pb-2">
-              <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+              <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-slate-100">
                 연관 태그
-              </p>
+              </div>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               {hotTags.length > 0 ? (

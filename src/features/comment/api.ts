@@ -49,6 +49,25 @@ function toFiniteNumber(value: unknown): number | undefined {
   return undefined;
 }
 
+function toRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function pickText(
+  ...values: Array<string | null | undefined>
+): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string") {
+      const normalized = value.trim();
+      if (normalized) return normalized;
+    }
+  }
+
+  return undefined;
+}
+
 function normalizeCommentResponse(raw: unknown): CommentResponse {
   if (raw && typeof raw === "object" && "data" in (raw as Record<string, unknown>)) {
     const nested = (raw as { data?: unknown }).data;
@@ -56,45 +75,43 @@ function normalizeCommentResponse(raw: unknown): CommentResponse {
       return normalizeCommentResponse(nested);
     }
   }
-  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const nestedUser =
-    obj.user && typeof obj.user === "object"
-      ? (obj.user as Record<string, unknown>)
-      : null;
-  const username =
-    typeof obj.username === "string"
-      ? obj.username
-      : typeof obj.userName === "string"
-        ? obj.userName
-        : typeof nestedUser?.username === "string"
-          ? nestedUser.username
-          : undefined;
-  const nickname =
-    typeof obj.nickname === "string"
-      ? obj.nickname
-      : typeof obj.nickName === "string"
-        ? obj.nickName
-        : typeof nestedUser?.nickname === "string"
-          ? nestedUser.nickname
-          : typeof nestedUser?.nickName === "string"
-            ? nestedUser.nickName
-            : undefined;
-  const displayName =
-    typeof obj.displayName === "string"
-      ? obj.displayName
-      : typeof obj.display_name === "string"
-        ? obj.display_name
-        : typeof nestedUser?.displayName === "string"
-          ? nestedUser.displayName
-          : typeof nestedUser?.display_name === "string"
-            ? nestedUser.display_name
-            : undefined;
-  const name =
-    typeof obj.name === "string"
-      ? obj.name
-      : typeof nestedUser?.name === "string"
-        ? nestedUser.name
-        : nickname || displayName || username || "익명";
+  const obj = toRecord(raw) ?? {};
+  const nestedUser = toRecord(obj.user);
+  const nestedProfile = toRecord(nestedUser?.profile);
+  const username = pickText(
+    typeof obj.username === "string" ? obj.username : undefined,
+    typeof obj.userName === "string" ? obj.userName : undefined,
+    typeof nestedUser?.username === "string" ? nestedUser.username : undefined,
+  );
+  const nickname = pickText(
+    typeof obj.nickname === "string" ? obj.nickname : undefined,
+    typeof obj.nickName === "string" ? obj.nickName : undefined,
+    typeof nestedUser?.nickname === "string" ? nestedUser.nickname : undefined,
+    typeof nestedUser?.nickName === "string" ? nestedUser.nickName : undefined,
+    typeof nestedProfile?.nickname === "string" ? nestedProfile.nickname : undefined,
+    typeof nestedProfile?.nickName === "string" ? nestedProfile.nickName : undefined,
+  );
+  const displayName = pickText(
+    typeof obj.displayName === "string" ? obj.displayName : undefined,
+    typeof obj.display_name === "string" ? obj.display_name : undefined,
+    typeof nestedUser?.displayName === "string" ? nestedUser.displayName : undefined,
+    typeof nestedUser?.display_name === "string"
+      ? nestedUser.display_name
+      : undefined,
+    typeof nestedProfile?.displayName === "string"
+      ? nestedProfile.displayName
+      : undefined,
+    typeof nestedProfile?.display_name === "string"
+      ? nestedProfile.display_name
+      : undefined,
+  );
+  const name = pickText(
+    typeof obj.name === "string" ? obj.name : undefined,
+    typeof nestedUser?.name === "string" ? nestedUser.name : undefined,
+    nickname,
+    displayName,
+    username,
+  ) ?? "익명";
   const rawReaction = typeof obj.myReaction === "string" ? obj.myReaction.toUpperCase() : null;
   const myReaction =
     rawReaction === "LIKE" || rawReaction === "DISLIKE" || rawReaction === "NONE"

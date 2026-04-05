@@ -33,10 +33,16 @@ export default function TagHubPage() {
 
   return (
     <div className="route-enter space-y-6">
-      <section className="rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_28%),linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.96))] p-6 dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.24),_transparent_24%),linear-gradient(180deg,_rgba(2,6,23,0.98),_rgba(15,23,42,0.98))] sm:p-8">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+      <section className="relative overflow-hidden rounded-[28px] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(239,246,255,0.92)_42%,rgba(224,242,254,0.78))] p-6 shadow-[0_28px_80px_-54px_rgba(37,99,235,0.26)] ring-1 ring-white/70 dark:border-slate-800/80 dark:bg-[linear-gradient(135deg,rgba(2,6,23,0.98),rgba(15,23,42,0.96)_48%,rgba(30,41,59,0.94))] dark:shadow-[0_32px_90px_-58px_rgba(14,165,233,0.32)] dark:ring-slate-800/70 sm:p-8">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -right-10 top-0 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(59,130,246,0.2),transparent_66%)] dark:bg-[radial-gradient(circle,rgba(56,189,248,0.2),transparent_68%)]" />
+          <div className="absolute left-0 top-10 h-44 w-44 rounded-full bg-[radial-gradient(circle,rgba(125,211,252,0.22),transparent_68%)] dark:bg-[radial-gradient(circle,rgba(37,99,235,0.16),transparent_72%)]" />
+          <div className="absolute bottom-0 left-1/3 h-36 w-36 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.76),transparent_72%)] dark:bg-[radial-gradient(circle,rgba(14,165,233,0.1),transparent_74%)]" />
+        </div>
+
+        <div className="relative flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white/90 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-200">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/75 px-3 py-1 text-xs font-semibold text-blue-700 shadow-sm backdrop-blur dark:border-sky-900/60 dark:bg-slate-900/55 dark:text-blue-300">
               <Hash className="h-3.5 w-3.5" />
               Tag Hub
             </div>
@@ -59,7 +65,7 @@ export default function TagHubPage() {
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-4">
-          <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <CardContent className="p-5">
               <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                 #{tag} 글 {feedQuery.data?.totalElements?.toLocaleString?.() ?? posts.length}개
@@ -71,13 +77,13 @@ export default function TagHubPage() {
           </Card>
 
           {posts.length === 0 ? (
-            <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+            <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <CardContent className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
                 아직 이 태그와 연결된 글이 없습니다.
               </CardContent>
             </Card>
           ) : (
-            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <div className="divide-y divide-slate-200 dark:divide-slate-800">
                 {posts.map((post) => (
                   <PostFeedListItem
@@ -93,9 +99,11 @@ export default function TagHubPage() {
         </div>
 
         <aside className="space-y-4">
-          <Card className="rounded-3xl border-slate-200 dark:border-slate-800">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <CardHeader className="pb-2">
-              <p className="text-sm font-black text-slate-900 dark:text-slate-100">연관 태그</p>
+              <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-slate-100">
+                연관 태그
+              </div>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               {topRelatedTags.length > 0 ? (

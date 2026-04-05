@@ -94,7 +94,7 @@ export default function HomePage() {
 
   return (
     <div className="route-enter space-y-8">
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8">
+      <section className="rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_30%),linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.98))] p-6 shadow-[0_24px_80px_-56px_rgba(37,99,235,0.42)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.28),_transparent_24%),linear-gradient(180deg,_rgba(2,6,23,0.98),_rgba(15,23,42,0.98))] sm:p-8">
         <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl space-y-4">
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-slate-700 dark:bg-slate-800 dark:text-blue-300">
@@ -139,13 +139,8 @@ export default function HomePage() {
         <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <CardContent className="space-y-4 p-6">
             <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-slate-100">
-              <TrendingUp className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+              <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-300" />
               오늘의 추천
-              {curationPostIds.length > 0 ? (
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                  운영자 추천
-                </span>
-              ) : null}
             </div>
             {feedQuery.isLoading ? (
               <div className="rounded-2xl bg-slate-50 p-8 text-center text-sm text-slate-500 dark:bg-slate-900/70 dark:text-slate-400">
@@ -159,7 +154,7 @@ export default function HomePage() {
                     to={resolvePostPath(post.id)}
                     className="group rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
                   >
-                    <div className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-100 px-2 text-xs font-black text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    <div className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-2 text-xs font-black text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
                       {index + 1}
                     </div>
                     <p className="mt-3 line-clamp-2 text-lg font-black tracking-tight text-slate-950 transition group-hover:text-blue-700 dark:text-slate-50 dark:group-hover:text-blue-300">
@@ -185,7 +180,7 @@ export default function HomePage() {
         <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-slate-100">
-              <Compass className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+              <Compass className="h-4 w-4 text-blue-600 dark:text-blue-300" />
               카테고리 탐색
             </div>
           </CardHeader>
@@ -201,7 +196,7 @@ export default function HomePage() {
                   to={`/categories/${category.id}`}
                   className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
                 >
-                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">
                     <LibraryBig className="h-3.5 w-3.5" />
                     Category
                   </div>
@@ -252,7 +247,7 @@ export default function HomePage() {
           <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-slate-100">
-                <Tags className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+                <Tags className="h-4 w-4 text-blue-600 dark:text-blue-300" />
                 인기 태그
               </div>
             </CardHeader>
@@ -278,7 +273,7 @@ export default function HomePage() {
           <Card className="rounded-2xl border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-slate-100">
-                <Sparkles className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+                <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-300" />
                 주목할 블로그
               </div>
             </CardHeader>

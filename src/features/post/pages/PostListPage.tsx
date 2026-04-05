@@ -1,4 +1,4 @@
-import { Lock, LogIn, X } from "lucide-react";
+import { Flame, Lock, LogIn, Tags, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -130,7 +130,7 @@ export default function PostListPage() {
 
   return (
     <div className="route-enter space-y-6 pt-2 font-sans sm:pt-0">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
+      <section className="rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_30%),linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.98))] p-6 shadow-[0_24px_80px_-56px_rgba(37,99,235,0.42)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.28),_transparent_24%),linear-gradient(180deg,_rgba(2,6,23,0.98),_rgba(15,23,42,0.98))]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
@@ -171,7 +171,9 @@ export default function PostListPage() {
               void preloadCreateFlow();
             }}
           >
-            <Button className="rounded-lg">글 작성</Button>
+            <Button className="rounded-lg">
+              글 작성
+            </Button>
           </Link>
         </div>
       </section>
@@ -315,7 +317,8 @@ export default function PostListPage() {
         <aside className="space-y-4 xl:sticky xl:top-24 xl:h-fit">
           <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+                <Flame className="h-4 w-4 text-blue-600 dark:text-blue-300" />
                 인기 글 TOP 5
               </h2>
               <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
@@ -332,7 +335,7 @@ export default function PostListPage() {
                     className="group block rounded-xl border border-slate-200 p-3 transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:hover:border-blue-900/70 dark:hover:bg-blue-950/30"
                   >
                     <div className="flex items-start gap-2">
-                      <span className="mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-100 px-1 text-[11px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      <span className="mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-1 text-[11px] font-bold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
                         {index + 1}
                       </span>
                       <div className="min-w-0">
@@ -356,7 +359,8 @@ export default function PostListPage() {
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+              <Tags className="h-4 w-4 text-blue-600 dark:text-blue-300" />
               인기 태그
             </h3>
             <div className="mt-3 flex flex-wrap gap-1.5">

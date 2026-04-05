@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type TouchEvent } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { EyeOff, LogOut, Trash2, X } from 'lucide-react';
@@ -62,8 +62,12 @@ type ChatUserLike = {
 };
 
 type InlineActionErrors = Record<string, string>;
+type MobileSheetKind = "friend-add" | "create-group" | "group-invite";
 
 const MOBILE_BREAKPOINT = 1024;
+const MOBILE_CHAT_LIST_VIEWPORT_OFFSET = "calc(10.5rem + env(safe-area-inset-bottom))";
+const MOBILE_CHAT_LIST_BOTTOM_PADDING = "calc(5.5rem + env(safe-area-inset-bottom))";
+const MOBILE_SHEET_EXIT_DURATION_MS = 220;
 
 const SIDEBAR_SECTIONS: Array<{
   key: ChatSidebarSection;
@@ -257,6 +261,9 @@ export default function ChatPage() {
   const [createGroupTitle, setCreateGroupTitle] = useState("");
   const [createGroupSearchKeyword, setCreateGroupSearchKeyword] = useState("");
   const [createGroupParticipantIds, setCreateGroupParticipantIds] = useState<number[]>([]);
+  const [isMobileSheetDragging, setIsMobileSheetDragging] = useState(false);
+  const [mobileSheetDragY, setMobileSheetDragY] = useState(0);
+  const [closingMobileSheet, setClosingMobileSheet] = useState<MobileSheetKind | null>(null);
 
   const [inviteTargetThreadId, setInviteTargetThreadId] = useState<number | null>(null);
   const [inviteSearchKeyword, setInviteSearchKeyword] = useState("");
@@ -268,6 +275,10 @@ export default function ChatPage() {
 
   const [inlineErrors, setInlineErrors] = useState<InlineActionErrors>({});
   const retryActionsRef = useRef<Map<string, () => Promise<void>>>(new Map());
+  const lockedScrollYRef = useRef(0);
+  const mobileSheetDragStartYRef = useRef<number | null>(null);
+  const mobileSheetDragDistanceRef = useRef(0);
+  const mobileSheetCloseTimerRef = useRef<number | null>(null);
   const activeSectionIndex = Math.max(
     0,
     SIDEBAR_SECTIONS.findIndex((section) => section.key === activeSection),
@@ -573,11 +584,76 @@ export default function ChatPage() {
     );
   };
 
+  const resetMobileSheetDragState = () => {
+    mobileSheetDragStartYRef.current = null;
+    mobileSheetDragDistanceRef.current = 0;
+    setIsMobileSheetDragging(false);
+    setMobileSheetDragY(0);
+  };
+
+  const runMobileSheetClose = (
+    sheet: MobileSheetKind,
+    finalize: () => void,
+  ) => {
+    if (!isMobile) {
+      resetMobileSheetDragState();
+      setClosingMobileSheet(null);
+      finalize();
+      return;
+    }
+
+    if (mobileSheetCloseTimerRef.current !== null) {
+      window.clearTimeout(mobileSheetCloseTimerRef.current);
+    }
+
+    setIsMobileSheetDragging(false);
+    setClosingMobileSheet(sheet);
+    mobileSheetCloseTimerRef.current = window.setTimeout(() => {
+      setClosingMobileSheet(null);
+      resetMobileSheetDragState();
+      finalize();
+      mobileSheetCloseTimerRef.current = null;
+    }, MOBILE_SHEET_EXIT_DURATION_MS);
+  };
+
+  const closeFriendAddModal = () => {
+    runMobileSheetClose("friend-add", () => {
+      setIsFriendAddModalOpen(false);
+      setFriendSearchKeyword("");
+    });
+  };
+
+  const openFriendAddModal = () => {
+    if (mobileSheetCloseTimerRef.current !== null) {
+      window.clearTimeout(mobileSheetCloseTimerRef.current);
+      mobileSheetCloseTimerRef.current = null;
+    }
+    setClosingMobileSheet(null);
+    resetMobileSheetDragState();
+    setIsFriendAddModalOpen(true);
+  };
+
   const resetCreateGroupModal = () => {
+    runMobileSheetClose("create-group", () => {
+      setCreateGroupTitle("");
+      setCreateGroupSearchKeyword("");
+      setCreateGroupParticipantIds([]);
+      setIsCreateGroupModalOpen(false);
+    });
+  };
+
+  const openCreateGroupModal = () => {
+    if (mobileSheetCloseTimerRef.current !== null) {
+      window.clearTimeout(mobileSheetCloseTimerRef.current);
+      mobileSheetCloseTimerRef.current = null;
+    }
+    setClosingMobileSheet(null);
+    setIsFriendAddModalOpen(false);
+    resetMobileSheetDragState();
     setCreateGroupTitle("");
     setCreateGroupSearchKeyword("");
     setCreateGroupParticipantIds([]);
-    setIsCreateGroupModalOpen(false);
+    setIsCreateGroupModalOpen(true);
   };
 
   const handleCreateGroupConversation = async () => {
@@ -609,12 +685,20 @@ export default function ChatPage() {
   };
 
   const resetGroupInviteModal = () => {
-    setInviteTargetThreadId(null);
-    setInviteSearchKeyword("");
-    setInviteTargetUserIds([]);
+    runMobileSheetClose("group-invite", () => {
+      setInviteTargetThreadId(null);
+      setInviteSearchKeyword("");
+      setInviteTargetUserIds([]);
+    });
   };
 
   const openGroupInviteModal = (threadId: number) => {
+    if (mobileSheetCloseTimerRef.current !== null) {
+      window.clearTimeout(mobileSheetCloseTimerRef.current);
+      mobileSheetCloseTimerRef.current = null;
+    }
+    setClosingMobileSheet(null);
+    resetMobileSheetDragState();
     setInviteTargetThreadId(threadId);
     setInviteSearchKeyword("");
     setInviteTargetUserIds([]);
@@ -985,7 +1069,9 @@ export default function ChatPage() {
           type="button"
           size="sm"
           variant="outline"
-          onClick={() => setIsFriendAddModalOpen(true)}
+          onClick={() => {
+            openFriendAddModal();
+          }}
           className="h-8 rounded-lg px-2 text-xs"
         >
           + 친구 추가
@@ -1309,7 +1395,9 @@ export default function ChatPage() {
           size="sm"
           variant="outline"
           className="h-8 rounded-lg px-2 text-xs"
-          onClick={() => setIsCreateGroupModalOpen(true)}
+          onClick={() => {
+            openCreateGroupModal();
+          }}
         >
           + 새 그룹
         </Button>
@@ -1422,6 +1510,24 @@ export default function ChatPage() {
 
   const selectedThreadType = selectedThread?.type;
   const isMobileThreadOpen = isMobile && Boolean(selectedThread);
+  const isFriendAddModalVisible =
+    isFriendAddModalOpen || closingMobileSheet === "friend-add";
+  const isCreateGroupModalVisible =
+    isCreateGroupModalOpen || closingMobileSheet === "create-group";
+  const isGroupInviteModalVisible =
+    inviteTargetThread !== null || closingMobileSheet === "group-invite";
+  const isAnyMobileModalOpen =
+    isFriendAddModalVisible ||
+    isCreateGroupModalVisible ||
+    isGroupInviteModalVisible;
+  const mobileSheetInlineStyle =
+    isMobile && (isMobileSheetDragging || mobileSheetDragY > 0 || closingMobileSheet)
+      ? ({
+          "--mobile-sheet-close-from": `${mobileSheetDragY}px`,
+          transform: `translateY(${mobileSheetDragY}px)`,
+          transitionDuration: isMobileSheetDragging ? "0ms" : "200ms",
+        } as CSSProperties)
+      : undefined;
   const mobileViewportHeight = useMobileVisualViewportHeight(isMobileThreadOpen);
   const mobileThreadShellStyle = isMobileThreadOpen
     ? {
@@ -1432,25 +1538,80 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (typeof document === "undefined") return;
-    if (!isMobileThreadOpen) return;
+    if (typeof window === "undefined") return;
+    if (!isMobileThreadOpen && !isAnyMobileModalOpen) return;
 
     const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevHtmlOverscroll = document.documentElement.style.overscrollBehavior;
     const prevBodyOverflow = document.body.style.overflow;
     const prevBodyOverscroll = document.body.style.overscrollBehavior;
+    const prevBodyPosition = document.body.style.position;
+    const prevBodyTop = document.body.style.top;
+    const prevBodyWidth = document.body.style.width;
 
     document.documentElement.style.overflow = "hidden";
     document.documentElement.style.overscrollBehavior = "none";
     document.body.style.overflow = "hidden";
     document.body.style.overscrollBehavior = "none";
 
+    if (isAnyMobileModalOpen) {
+      lockedScrollYRef.current = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${lockedScrollYRef.current}px`;
+      document.body.style.width = "100%";
+    }
+
     return () => {
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.documentElement.style.overscrollBehavior = prevHtmlOverscroll;
       document.body.style.overflow = prevBodyOverflow;
       document.body.style.overscrollBehavior = prevBodyOverscroll;
+      document.body.style.position = prevBodyPosition;
+      document.body.style.top = prevBodyTop;
+      document.body.style.width = prevBodyWidth;
+      if (isAnyMobileModalOpen) {
+        window.scrollTo({ top: lockedScrollYRef.current, behavior: "auto" });
+      }
     };
-  }, [isMobileThreadOpen]);
+  }, [isAnyMobileModalOpen, isMobileThreadOpen]);
+
+  const closeActiveMobileSheet = () => {
+    if (inviteTargetThread) {
+      resetGroupInviteModal();
+      return;
+    }
+    if (isCreateGroupModalOpen) {
+      resetCreateGroupModal();
+      return;
+    }
+    if (isFriendAddModalOpen) {
+      closeFriendAddModal();
+    }
+  };
+
+  const handleMobileSheetTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobile || event.touches.length !== 1) return;
+    mobileSheetDragStartYRef.current = event.touches[0].clientY;
+    mobileSheetDragDistanceRef.current = 0;
+    setIsMobileSheetDragging(true);
+  };
+
+  const handleMobileSheetTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobile || mobileSheetDragStartYRef.current === null) return;
+    const delta = event.touches[0].clientY - mobileSheetDragStartYRef.current;
+    const next = Math.max(0, delta);
+    mobileSheetDragDistanceRef.current = next;
+    setMobileSheetDragY(next);
+  };
+
+  const handleMobileSheetTouchEnd = () => {
+    if (!isMobile || mobileSheetDragStartYRef.current === null) return;
+    const shouldClose = mobileSheetDragDistanceRef.current > 96;
+    resetMobileSheetDragState();
+    if (shouldClose) {
+      closeActiveMobileSheet();
+    }
+  };
 
   const chatRoomPanel = selectedThread ? (
     <ChatRoom
@@ -1499,11 +1660,75 @@ export default function ChatPage() {
     </SurfaceCard>
   );
 
+  const mobileSidebarPanel = (
+    <SurfaceCard
+      padded="none"
+      className="overflow-hidden rounded-2xl border border-slate-200 bg-white/95 dark:border-slate-700 dark:bg-slate-900/95"
+    >
+      <div
+        className="flex flex-col"
+        style={{
+          minHeight: `calc(100dvh - ${MOBILE_CHAT_LIST_VIEWPORT_OFFSET})`,
+          maxHeight: `calc(100dvh - ${MOBILE_CHAT_LIST_VIEWPORT_OFFSET})`,
+        }}
+      >
+        {sidebarHeader}
+        <div
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          style={{ paddingBottom: MOBILE_CHAT_LIST_BOTTOM_PADDING }}
+        >
+          {sideSectionContent}
+        </div>
+      </div>
+    </SurfaceCard>
+  );
+
+  useEffect(() => {
+    return () => {
+      if (mobileSheetCloseTimerRef.current !== null) {
+        window.clearTimeout(mobileSheetCloseTimerRef.current);
+      }
+    };
+  }, []);
+
   const friendAddModal =
-    isFriendAddModalOpen && typeof document !== "undefined"
+    isFriendAddModalVisible && typeof document !== "undefined"
       ? createPortal(
-          <div className="fixed inset-0 z-[180] flex items-end justify-center bg-slate-900/45 p-0 sm:items-center sm:p-4">
-            <div className="w-full rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-lg sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900">
+          <div className="fixed inset-0 z-[180] flex items-end justify-center p-0 sm:items-center sm:p-4">
+            <div
+              aria-hidden="true"
+              className={[
+                "absolute inset-0 bg-slate-900/45",
+                isMobile
+                  ? closingMobileSheet === "friend-add"
+                    ? "mobile-sheet-overlay-exit"
+                    : "mobile-sheet-overlay-enter"
+                  : "animate-in fade-in-0 duration-200 ease-out",
+              ].join(" ")}
+              onClick={closeFriendAddModal}
+            />
+            <div
+              className={[
+                "relative w-full rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-lg sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900",
+                isMobile
+                  ? closingMobileSheet === "friend-add"
+                    ? "mobile-sheet-exit"
+                    : "mobile-sheet-enter"
+                  : "animate-in fade-in-0 zoom-in-95 duration-200 ease-out",
+              ].join(" ")}
+              style={mobileSheetInlineStyle}
+            >
+              {isMobile && (
+                <div
+                  className="mb-3 touch-none rounded-t-3xl bg-white px-4 pt-2 dark:bg-slate-900"
+                  onTouchStart={handleMobileSheetTouchStart}
+                  onTouchMove={handleMobileSheetTouchMove}
+                  onTouchEnd={handleMobileSheetTouchEnd}
+                  onTouchCancel={resetMobileSheetDragState}
+                >
+                  <div className="mx-auto h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
+                </div>
+              )}
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
                   <p className="text-base font-black text-slate-900 dark:text-slate-100">친구 추가</p>
@@ -1514,10 +1739,7 @@ export default function ChatPage() {
                 <button
                   type="button"
                   className="rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                  onClick={() => {
-                    setIsFriendAddModalOpen(false);
-                    setFriendSearchKeyword("");
-                  }}
+                  onClick={closeFriendAddModal}
                 >
                   닫기
                 </button>
@@ -1582,10 +1804,43 @@ export default function ChatPage() {
       : null;
 
   const createGroupModal =
-    isCreateGroupModalOpen && typeof document !== "undefined"
+    isCreateGroupModalVisible && typeof document !== "undefined"
       ? createPortal(
-          <div className="fixed inset-0 z-[180] flex items-end justify-center bg-slate-900/45 p-0 sm:items-center sm:p-4">
-            <div className="w-full rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900">
+          <div className="fixed inset-0 z-[180] flex items-end justify-center p-0 sm:items-center sm:p-4">
+            <div
+              aria-hidden="true"
+              className={[
+                "absolute inset-0 bg-slate-900/45",
+                isMobile
+                  ? closingMobileSheet === "create-group"
+                    ? "mobile-sheet-overlay-exit"
+                    : "mobile-sheet-overlay-enter"
+                  : "animate-in fade-in-0 duration-200 ease-out",
+              ].join(" ")}
+              onClick={resetCreateGroupModal}
+            />
+            <div
+              className={[
+                "relative w-full rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900",
+                isMobile
+                  ? closingMobileSheet === "create-group"
+                    ? "mobile-sheet-exit"
+                    : "mobile-sheet-enter"
+                  : "animate-in fade-in-0 zoom-in-95 duration-200 ease-out",
+              ].join(" ")}
+              style={mobileSheetInlineStyle}
+            >
+              {isMobile && (
+                <div
+                  className="mb-3 touch-none rounded-t-3xl bg-white px-4 pt-2 dark:bg-slate-900"
+                  onTouchStart={handleMobileSheetTouchStart}
+                  onTouchMove={handleMobileSheetTouchMove}
+                  onTouchEnd={handleMobileSheetTouchEnd}
+                  onTouchCancel={resetMobileSheetDragState}
+                >
+                  <div className="mx-auto h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
+                </div>
+              )}
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
                   <p className="text-base font-black text-slate-900 dark:text-slate-100">
@@ -1673,10 +1928,43 @@ export default function ChatPage() {
       : null;
 
   const groupInviteModal =
-    inviteTargetThread && typeof document !== "undefined"
+    isGroupInviteModalVisible && inviteTargetThread && typeof document !== "undefined"
       ? createPortal(
-          <div className="fixed inset-0 z-[180] flex items-end justify-center bg-slate-900/45 p-0 sm:items-center sm:p-4">
-            <div className="w-full rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900">
+          <div className="fixed inset-0 z-[180] flex items-end justify-center p-0 sm:items-center sm:p-4">
+            <div
+              aria-hidden="true"
+              className={[
+                "absolute inset-0 bg-slate-900/45",
+                isMobile
+                  ? closingMobileSheet === "group-invite"
+                    ? "mobile-sheet-overlay-exit"
+                    : "mobile-sheet-overlay-enter"
+                  : "animate-in fade-in-0 duration-200 ease-out",
+              ].join(" ")}
+              onClick={resetGroupInviteModal}
+            />
+            <div
+              className={[
+                "relative w-full rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900",
+                isMobile
+                  ? closingMobileSheet === "group-invite"
+                    ? "mobile-sheet-exit"
+                    : "mobile-sheet-enter"
+                  : "animate-in fade-in-0 zoom-in-95 duration-200 ease-out",
+              ].join(" ")}
+              style={mobileSheetInlineStyle}
+            >
+              {isMobile && (
+                <div
+                  className="mb-3 touch-none rounded-t-3xl bg-white px-4 pt-2 dark:bg-slate-900"
+                  onTouchStart={handleMobileSheetTouchStart}
+                  onTouchMove={handleMobileSheetTouchMove}
+                  onTouchEnd={handleMobileSheetTouchEnd}
+                  onTouchCancel={resetMobileSheetDragState}
+                >
+                  <div className="mx-auto h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
+                </div>
+              )}
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
                   <p className="text-base font-black text-slate-900 dark:text-slate-100">
@@ -1783,8 +2071,8 @@ export default function ChatPage() {
         </div>
       )}
 
-      {isMobile && selectedThread ? (
-        chatRoomPanel
+      {isMobile ? (
+        selectedThread ? chatRoomPanel : mobileSidebarPanel
       ) : (
         <div
           className={

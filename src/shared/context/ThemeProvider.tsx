@@ -2,7 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -42,7 +42,7 @@ function applyThemeClass(theme: Theme) {
 export default function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => resolveInitialTheme());
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     applyThemeClass(theme);
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, theme);
