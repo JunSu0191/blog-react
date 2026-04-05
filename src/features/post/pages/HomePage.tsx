@@ -257,7 +257,7 @@ export default function HomePage() {
                   <Link
                     key={name}
                     to={`/tags/${encodeURIComponent(name)}`}
-                    className="inline-flex rounded-full transition hover:-translate-y-0.5"
+                    className="inline-flex rounded-full"
                   >
                     <TagChip label={name} count={count} />
                   </Link>

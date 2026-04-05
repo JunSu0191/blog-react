@@ -380,7 +380,7 @@ export default function PostDetailPage() {
             />
             <div
               className={[
-                'relative w-full rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900',
+                'relative flex w-full h-[900px] flex-col rounded-t-3xl border border-slate-200 bg-white p-4 shadow-2xl sm:max-w-xl sm:rounded-3xl dark:border-slate-700 dark:bg-slate-900',
                 isMobile
                   ? (isMobileSheetDragging ? '' : 'mobile-sheet-enter')
                   : 'animate-in fade-in-0 zoom-in-95 duration-200 ease-out',
@@ -398,7 +398,7 @@ export default function PostDetailPage() {
                   <div className='mx-auto h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600' />
                 </div>
               )}
-              <div className='space-y-3'>
+              <div className='flex min-h-0 flex-1 flex-col space-y-3'>
                 <div className='mb-3 flex items-start justify-between gap-2'>
                   <div>
                     <p className='text-base font-black text-slate-900 dark:text-slate-100'>
@@ -417,7 +417,7 @@ export default function PostDetailPage() {
                   </button>
                 </div>
 
-                <div className='max-h-[min(80dvh,calc(100dvh-6rem))] space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/70'>
+                <div className='min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/70'>
                   <CommentList postId={post.id}/>
                 </div>
               </div>
