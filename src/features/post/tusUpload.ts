@@ -96,7 +96,7 @@ async function requestTusComplete(
 
 export function createTusUpload(file: File, options: TusUploadOptions = {}) {
   const {
-    endpoint = `${API_BASE_URL}/attach-files/uploads/`,
+    endpoint = `${API_BASE_URL}/attach-files/uploads`,
     headers = {},
     metadata = {},
     onProgress,
