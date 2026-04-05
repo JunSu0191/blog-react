@@ -10,7 +10,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Button, Input, Select } from "@/shared/ui";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { ActionDialog, Button, Input, Select } from "@/shared/ui";
 import { useToast } from "@/shared/ui/ToastProvider";
 import HashtagInput from "../components/HashtagInput";
 import { getPostDraft, uploadPostImage } from "../api";
@@ -164,6 +165,7 @@ function EditorLoader() {
 export default function CreatePostPage() {
   const params = useParams<{ postId?: string }>();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { success, error: showError } = useToast();
   const rawPostId = Number(params.postId);
   const editingPostId =
@@ -665,6 +667,38 @@ export default function CreatePostPage() {
       documentElement.style.overscrollBehavior = previousHtmlOverscrollBehavior;
     };
   }, [isFocusComposeOpen]);
+
+  if (isMobile) {
+    return (
+      <>
+        <div className="route-enter flex min-h-[48vh] items-center justify-center rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="space-y-3">
+            <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-100">
+              모바일에서는 글쓰기를 지원하지 않습니다.
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              게시글 작성과 수정은 PC 환경에서 진행해 주세요.
+            </p>
+          </div>
+        </div>
+
+        <ActionDialog
+          open
+          title="PC에서 글쓰기를 이용해 주세요"
+          description="모바일 환경에서는 에디터 사용을 제한하고 있습니다. PC에서 접속해 게시글을 작성하거나 수정해 주세요."
+          confirmText="목록으로 이동"
+          onConfirm={() => {
+            navigate("/posts", { replace: true });
+          }}
+          onOpenChange={() => {
+            navigate("/posts", { replace: true });
+          }}
+          closeOnEsc={false}
+          closeOnOverlayClick={false}
+        />
+      </>
+    );
+  }
 
   if (isEditMode && editTargetQuery.isLoading) {
     return (
