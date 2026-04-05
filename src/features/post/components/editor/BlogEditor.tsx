@@ -33,6 +33,10 @@ import {
   Undo2,
 } from "lucide-react";
 import {
+  TusUploadStage,
+  type TusUploadStage as TusUploadStageType,
+} from "../../tusUpload";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -56,7 +60,12 @@ type BlogEditorProps = {
   disabled?: boolean;
   fullScreen?: boolean;
   onChange: (payload: BlogEditorChangePayload) => void;
-  onUploadImage: (file: File) => Promise<string>;
+  onUploadImage: (
+    file: File,
+    options?: {
+      onStageChange?: (stage: TusUploadStageType) => void;
+    },
+  ) => Promise<string>;
 };
 
 type ToolbarButtonProps = {
@@ -160,6 +169,16 @@ function toErrorMessage(error: unknown) {
   return "이미지 업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 }
 
+function getUploadStageLabel(stage: TusUploadStageType) {
+  if (stage === TusUploadStage.COMPLETING) {
+    return "최종 저장 요청 중...";
+  }
+  if (stage === TusUploadStage.COMPLETED) {
+    return "업로드 완료";
+  }
+  return "업로드 중...";
+}
+
 function ToolbarButton({
   label,
   title,
@@ -216,6 +235,9 @@ export default function BlogEditor({
   const lastEmittedHtmlRef = useRef<string>("");
   const lastEmittedJsonRef = useRef<string>("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadStage, setUploadStage] = useState<TusUploadStageType>(
+    TusUploadStage.UPLOADING,
+  );
   const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
   const normalizedHtml = valueHtml.trim();
   const normalizedHtmlFromJson = useMemo(
@@ -302,8 +324,11 @@ export default function BlogEditor({
       if (!editor) return;
       setUploadErrorMessage(null);
       setIsUploadingImage(true);
+      setUploadStage(TusUploadStage.UPLOADING);
       try {
-        const uploadedUrl = await onUploadImage(file);
+        const uploadedUrl = await onUploadImage(file, {
+          onStageChange: setUploadStage,
+        });
         editor.chain().focus().setImage({ src: uploadedUrl }).run();
       } catch (error) {
         setUploadErrorMessage(toErrorMessage(error));
@@ -667,7 +692,11 @@ export default function BlogEditor({
       <EditorContent editor={editor} />
 
       <div className="border-t border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300 sm:px-4">
-        <span>Ctrl+V 붙여넣기, 드래그앤드롭으로 이미지 업로드가 가능합니다.</span>
+        <span>
+          {isUploadingImage
+            ? `이미지 ${getUploadStageLabel(uploadStage)}`
+            : "Ctrl+V 붙여넣기, 드래그앤드롭으로 이미지 업로드가 가능합니다."}
+        </span>
       </div>
 
       {uploadErrorMessage ? (

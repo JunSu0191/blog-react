@@ -874,8 +874,10 @@ export default function CreatePostPage() {
             fullScreen={fullScreen}
             valueHtml={formValues.contentHtml}
             valueJson={formValues.contentJson}
-            onUploadImage={async (file) => {
-              const uploaded = await uploadPostImage(file);
+            onUploadImage={async (file, options) => {
+              const uploaded = await uploadPostImage(file, {
+                onStageChange: options?.onStageChange,
+              });
               return uploaded.url;
             }}
             onChange={(payload) => {

@@ -8,6 +8,7 @@ import type { ChangeEvent, ReactNode } from "react";
 import Button from "./Button";
 import { useTusUpload } from "../../shared/hooks/useTusUpload";
 import { useAuthContext } from "../context/useAuthContext";
+import { TusUploadStage } from "../../features/post/tusUpload";
 
 interface RichTextEditorProps {
   value: string;
@@ -74,7 +75,7 @@ export default function RichTextEditor({
   placeholder,
 }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { upload, isUploading, progress, error } = useTusUpload();
+  const { upload, isUploading, progress, stage, error } = useTusUpload();
   const { token } = useAuthContext();
 
   const editor = useEditor({
@@ -128,13 +129,7 @@ export default function RichTextEditor({
         const imageUrl = await upload(file, { headers: buildAuthHeaders() });
         editor?.chain().focus().setImage({ src: imageUrl }).run();
       } catch (uploadError) {
-        console.error("이미지 업로드 실패, base64로 fallback:", uploadError);
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const imageUrl = event.target?.result as string;
-          editor?.chain().focus().setImage({ src: imageUrl }).run();
-        };
-        reader.readAsDataURL(file);
+        console.error("이미지 업로드 실패:", uploadError);
       }
     },
     [buildAuthHeaders, editor, upload],
@@ -232,6 +227,11 @@ export default function RichTextEditor({
     if (!editor) return 0;
     return editor.getText().trim().length;
   }, [editor, value]);
+
+  const uploadStatusLabel =
+    stage === TusUploadStage.COMPLETING
+      ? "complete 요청 중"
+      : "업로드 중";
 
   if (!editor) {
     return (
@@ -384,7 +384,7 @@ export default function RichTextEditor({
               />
             </div>
             <p className="mt-1 text-right text-xs font-medium text-blue-700">
-              이미지 업로드 중 {Math.round(progress)}%
+              이미지 {uploadStatusLabel} {Math.round(progress)}%
             </p>
           </div>
         )}

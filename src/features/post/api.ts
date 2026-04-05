@@ -18,6 +18,7 @@ import type {
   PostWriteRequest,
   UploadImageResponse,
 } from "./types/api";
+import { uploadImageWithTus, type TusUploadOptions } from "./tusUpload";
 import {
   estimateReadTimeMinutes,
   extractTocFromHtml,
@@ -40,7 +41,6 @@ const POSTS_ENDPOINT = `${API_ROOT}/posts`;
 const DRAFTS_ENDPOINT = `${API_ROOT}/posts/drafts`;
 const MYPAGE_POSTS_ENDPOINT = `${API_ROOT}/mypage/posts`;
 const RELATED_ENDPOINT_SUFFIX = "related";
-const IMAGE_UPLOAD_ENDPOINT = `${API_ROOT}/uploads/images`;
 const CATEGORIES_ENDPOINTS = [`${API_ROOT}/categories`] as const;
 
 export type PostLikeStatus = {
@@ -731,39 +731,14 @@ function toQueryString(params: Record<string, string | number | undefined>) {
   return text.length > 0 ? `?${text}` : "";
 }
 
-export async function uploadPostImage(file: File): Promise<UploadImageResponse> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const response = await api<unknown>(IMAGE_UPLOAD_ENDPOINT, {
-    method: "POST",
-    data: formData,
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
-
-  if (typeof response === "string") {
-    return { url: response };
-  }
-
-  const record = toRecord(response);
-  if (!record) {
-    throw new Error("이미지 업로드 응답 형식이 올바르지 않습니다.");
-  }
-
-  const url =
-    toText(record.url) || toText(record.fileUrl) || toText(record.displayUrl);
-
-  if (!url) {
-    throw new Error("업로드된 이미지 URL을 확인할 수 없습니다.");
-  }
+export async function uploadPostImage(
+  file: File,
+  options: TusUploadOptions = {},
+): Promise<UploadImageResponse> {
+  const url = await uploadImageWithTus(file, options);
 
   return {
     url,
-    width: toMaybeNumber(record.width),
-    height: toMaybeNumber(record.height),
-    size: toMaybeNumber(record.size),
   };
 }
 

@@ -8,9 +8,19 @@ export interface TusUploadOptions {
   metadata?: Record<string, string>;
   postId?: number;
   onProgress?: (uploaded: number, total: number) => void;
+  onStageChange?: (stage: TusUploadStage) => void;
   onError?: (error: Error) => void;
   onSuccess?: (url: string) => void;
 }
+
+export const TusUploadStage = {
+  UPLOADING: "uploading",
+  COMPLETING: "completing",
+  COMPLETED: "completed",
+} as const;
+
+export type TusUploadStage =
+  (typeof TusUploadStage)[keyof typeof TusUploadStage];
 
 type TusCompleteResponseData = {
   id?: number;
@@ -44,7 +54,7 @@ async function requestTusComplete(
   uploadId: string,
   file: File,
   options: TusUploadOptions,
-): Promise<string | null> {
+): Promise<string> {
   const token = getToken();
   const completeHeaders: Record<string, string> = {
     "Content-Type": "application/json",
@@ -65,48 +75,23 @@ async function requestTusComplete(
     }),
   });
 
+  const completePayload = (await completeResponse
+    .json()
+    .catch(() => ({}))) as ApiEnvelope<TusCompleteResponseData>;
+
   if (!completeResponse.ok) {
-    return null;
+    const message = completePayload.message?.trim();
+    throw new Error(message || "업로드 완료 처리에 실패했습니다.");
   }
 
-  const completePayload = (await completeResponse.json()) as ApiEnvelope<TusCompleteResponseData>;
+  const finalUrl =
+    completePayload.data?.displayUrl || completePayload.data?.fileUrl;
 
-  return (
-    completePayload.data?.displayUrl ||
-    completePayload.data?.fileUrl ||
-    completePayload.data?.path ||
-    null
-  );
-}
-
-async function requestUploadInfo(
-  uploadId: string,
-  uploadUrl: string,
-  options: TusUploadOptions,
-): Promise<string | null> {
-  const token = getToken();
-  const infoHeaders: Record<string, string> = {
-    ...(options.headers || {}),
-  };
-  if (token && !infoHeaders.Authorization) {
-    infoHeaders.Authorization = `Bearer ${token}`;
+  if (!finalUrl) {
+    throw new Error("업로드 완료 응답에 최종 파일 URL이 없습니다.");
   }
 
-  const infoResponse = await fetch(
-    `${API_BASE_URL}/attach-files/uploads/${uploadId}/info`,
-    { headers: infoHeaders },
-  );
-  if (!infoResponse.ok) {
-    return uploadUrl;
-  }
-
-  const infoPayload = (await infoResponse.json()) as ApiEnvelope<Record<string, string>>;
-  return (
-    infoPayload.data?.downloadUrl ||
-    infoPayload.data?.displayUrl ||
-    infoPayload.data?.fileUrl ||
-    uploadUrl
-  );
+  return finalUrl;
 }
 
 export function createTusUpload(file: File, options: TusUploadOptions = {}) {
@@ -116,7 +101,6 @@ export function createTusUpload(file: File, options: TusUploadOptions = {}) {
     metadata = {},
     onProgress,
     onError,
-    onSuccess,
   } = options;
 
   const upload = new Upload(file, {
@@ -137,7 +121,7 @@ export function createTusUpload(file: File, options: TusUploadOptions = {}) {
       onProgress?.(uploaded, total);
     },
     onSuccess: () => {
-      onSuccess?.(upload.url ?? "");
+      return;
     },
   });
 
@@ -162,33 +146,30 @@ export async function uploadImageWithTus(
             throw new Error("Upload ID를 추출할 수 없습니다");
           }
 
-          // 우선 complete API로 public URL 확보, 실패 시 info API로 fallback
-          const completedUrl =
-            (await requestTusComplete(uploadId, file, options)) ||
-            (await requestUploadInfo(uploadId, upload.url, options)) ||
-            upload.url;
+          options.onStageChange?.(TusUploadStage.COMPLETING);
+          const completedUrl = await requestTusComplete(uploadId, file, options);
 
           const fileUrl =
             /^https?:\/\//i.test(completedUrl) || completedUrl.startsWith("/")
               ? completedUrl
               : `/${completedUrl}`;
 
+          options.onStageChange?.(TusUploadStage.COMPLETED);
           options.onSuccess?.(fileUrl);
           resolve(fileUrl);
         } catch (error) {
-          console.error(error);
-          const fallbackUrl = upload.url;
-          if (fallbackUrl) {
-            options.onSuccess?.(fallbackUrl);
-            resolve(fallbackUrl);
-            return;
-          }
-          reject(
+          console.error("Tus complete error:", error);
+          const uploadError =
             error instanceof Error
               ? error
-              : new Error("업로드 후 파일 URL을 확인할 수 없습니다."),
-          );
+              : new Error("업로드 후 파일 URL을 확인할 수 없습니다.");
+          options.onError?.(uploadError);
+          reject(uploadError);
         }
+      },
+      onProgress: (uploaded, total) => {
+        options.onStageChange?.(TusUploadStage.UPLOADING);
+        options.onProgress?.(uploaded, total);
       },
       onError: (error) => {
         options.onError?.(error);
@@ -196,6 +177,7 @@ export async function uploadImageWithTus(
       },
     });
 
+    options.onStageChange?.(TusUploadStage.UPLOADING);
     upload.start();
   });
 }
