@@ -1,6 +1,6 @@
-import { Link } from "react-router-dom";
 import { cn } from "@/shared/lib/cn";
 import Button from "@/shared/ui/Button";
+import ActionTextLink from "@/shared/ui/ActionTextLink";
 import { formatDateTime } from "../format";
 import { useAdminRecentComments } from "../queries";
 
@@ -46,12 +46,9 @@ export default function AdminRecentCommentsPreview() {
             최신 댓글 상태와 반응을 확인합니다.
           </p>
         </div>
-        <Link
-          to="/admin/comments"
-          className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
-        >
-          더보기 →
-        </Link>
+        <ActionTextLink to="/admin/comments" className="text-xs">
+          더보기
+        </ActionTextLink>
       </header>
 
       {query.isLoading ? (

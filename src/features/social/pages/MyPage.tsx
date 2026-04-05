@@ -208,7 +208,7 @@ export default function MyPage() {
                 {visibleDisplayName}
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                아이디 @{summary.username}
+                아이디 {summary.username}
               </p>
               {summary.profile.bio && (
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">

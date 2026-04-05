@@ -1,6 +1,6 @@
-import { Link } from "react-router-dom";
 import { cn } from "@/shared/lib/cn";
 import Button from "@/shared/ui/Button";
+import ActionTextLink from "@/shared/ui/ActionTextLink";
 import { formatDateTime } from "../format";
 import { useAdminRecentPosts } from "../queries";
 
@@ -46,12 +46,9 @@ export default function AdminRecentPostsPreview() {
             최신 게시글 상태를 빠르게 확인합니다.
           </p>
         </div>
-        <Link
-          to="/admin/posts"
-          className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
-        >
-          더보기 →
-        </Link>
+        <ActionTextLink to="/admin/posts" className="text-xs">
+          더보기
+        </ActionTextLink>
       </header>
 
       {query.isLoading ? (

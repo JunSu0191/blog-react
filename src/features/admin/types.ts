@@ -39,6 +39,7 @@ export type AdminUserRow = {
   id: number;
   username: string;
   name: string;
+  nickname?: string;
   role: UserRole;
   status: UserStatus;
   createdAt?: string;

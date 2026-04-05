@@ -338,7 +338,7 @@ export default function AdminUsersPage() {
                         </div>
                       </div>
                       <p className="mt-1 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
-                        {user.name} · {formatDateTime(user.createdAt)}
+                        {user.name} · 닉네임 {user.nickname || "-"} · {formatDateTime(user.createdAt)}
                       </p>
                     </div>
                   </div>
@@ -370,7 +370,7 @@ export default function AdminUsersPage() {
                 </TableHeader>
                 <TableHeader>
                   <SortableHeader
-                    label="아이디"
+                    label="번호"
                     field="id"
                     currentField={listParams.sortField}
                     direction={listParams.sortDirection}
@@ -379,7 +379,7 @@ export default function AdminUsersPage() {
                 </TableHeader>
                 <TableHeader>
                   <SortableHeader
-                    label="사용자명"
+                    label="사용자 계정"
                     field="username"
                     currentField={listParams.sortField}
                     direction={listParams.sortDirection}
@@ -387,6 +387,7 @@ export default function AdminUsersPage() {
                   />
                 </TableHeader>
                 <TableHeader>이름</TableHeader>
+                <TableHeader>닉네임</TableHeader>
                 <TableHeader>권한</TableHeader>
                 <TableHeader>상태</TableHeader>
                 <TableHeader>
@@ -403,14 +404,14 @@ export default function AdminUsersPage() {
             <TableBody>
               {usersQuery.isLoading && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-slate-500">
+                  <TableCell colSpan={8} className="text-center text-slate-500">
                     사용자 목록을 불러오는 중...
                   </TableCell>
                 </TableRow>
               )}
               {!usersQuery.isLoading && usersQuery.isError && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-rose-600">
+                  <TableCell colSpan={8} className="text-center text-rose-600">
                     {usersQuery.error.message}
                   </TableCell>
                 </TableRow>
@@ -444,7 +445,7 @@ export default function AdminUsersPage() {
                             {user.username}
                           </p>
                           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            계정 핸들
+                            계정
                           </p>
                         </div>
                       </TableCell>
@@ -455,6 +456,16 @@ export default function AdminUsersPage() {
                           </p>
                           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                             프로필 표시 이름
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900 dark:text-slate-100">
+                            {user.nickname || "-"}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            프로필 닉네임
                           </p>
                         </div>
                       </TableCell>
@@ -485,7 +496,7 @@ export default function AdminUsersPage() {
                 !usersQuery.isError &&
                 rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-slate-500">
+                    <TableCell colSpan={8} className="text-center text-slate-500">
                       조회 결과가 없습니다.
                     </TableCell>
                   </TableRow>

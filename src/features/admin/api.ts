@@ -164,6 +164,11 @@ function normalizeAdminUser(raw: unknown): AdminUserRow | null {
     id,
     username: toText(obj.username) || `user-${id}`,
     name: toText(obj.name) || toText(obj.displayName) || "-",
+    nickname:
+      toText(obj.nickname) ||
+      toText(obj.nickName) ||
+      toText(obj.displayName) ||
+      "-",
     role: resolveRole(obj.role),
     status: resolveStatus(obj.status),
     createdAt: toText(obj.createdAt) || toText(obj.created_at),
