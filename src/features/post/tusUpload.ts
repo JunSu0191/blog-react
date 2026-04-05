@@ -101,6 +101,7 @@ export function createTusUpload(file: File, options: TusUploadOptions = {}) {
     metadata = {},
     onProgress,
     onError,
+    onSuccess,
   } = options;
 
   const upload = new Upload(file, {
@@ -121,7 +122,7 @@ export function createTusUpload(file: File, options: TusUploadOptions = {}) {
       onProgress?.(uploaded, total);
     },
     onSuccess: () => {
-      return;
+      onSuccess?.(upload.url ?? "");
     },
   });
 
