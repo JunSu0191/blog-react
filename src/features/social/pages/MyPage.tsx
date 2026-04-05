@@ -485,7 +485,7 @@ export default function MyPage() {
                   <Link
                     key={post.id}
                     to={`/posts/${post.id}`}
-                    className="block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600 dark:hover:bg-slate-900"
+                    className="block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-blue-200 hover:bg-blue-50/70 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/20"
                   >
                     <p className="line-clamp-1 text-sm font-bold text-slate-900 dark:text-slate-100">
                       {post.title}
