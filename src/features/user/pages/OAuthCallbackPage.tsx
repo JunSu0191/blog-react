@@ -2,6 +2,11 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthContext } from "@/shared/context/useAuthContext";
+import {
+  hasCompletedNicknameOnboarding,
+  markNicknameOnboardingCompleted,
+} from "@/shared/lib/nicknameOnboarding";
+import { needsNicknameOnboarding } from "@/shared/lib/displayName";
 import { parseErrorMessage } from "@/shared/lib/errorParser";
 import { Button, ThemeToggle } from "@/shared/ui";
 import { useToast } from "@/shared/ui/ToastProvider";
@@ -51,10 +56,33 @@ export default function OAuthCallbackPage() {
     };
 
     void (async () => {
+      if (callbackPayload.needsProfileSetup && callbackPayload.signupToken) {
+        const nextPath = consumePostLoginRedirectPath();
+        navigate(
+          `/register/social?signupToken=${encodeURIComponent(callbackPayload.signupToken)}`,
+          {
+            replace: true,
+            state: { redirectTo: nextPath },
+          },
+        );
+        return;
+      }
+
       if (callbackPayload.token) {
         try {
-          await loginWithToken(callbackPayload.token);
+          const user = await loginWithToken(callbackPayload.token);
           const nextPath = consumePostLoginRedirectPath();
+          if (
+            needsNicknameOnboarding(user) &&
+            !hasCompletedNicknameOnboarding(user.id)
+          ) {
+            navigate("/onboarding/nickname", {
+              replace: true,
+              state: { redirectTo: nextPath },
+            });
+            return;
+          }
+          markNicknameOnboardingCompleted(user.id);
           navigate(nextPath, { replace: true });
           return;
         } catch (error) {

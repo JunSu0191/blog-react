@@ -5,13 +5,17 @@ const DEFAULT_REDIRECT_PATH = "/posts";
 const BLOCKED_REDIRECT_PATHS = new Set([
   "/login",
   "/register",
+  "/register/social",
   "/auth/callback",
+  "/onboarding/nickname",
 ]);
 
 export type OAuthProvider = "google" | "kakao" | "naver";
 
 export type OAuthCallbackResult = {
   token?: string;
+  signupToken?: string;
+  needsProfileSetup?: boolean;
   errorCode?: string;
   errorMessage?: string;
 };
@@ -132,6 +136,9 @@ export function parseOAuthCallbackResult(
   const tokenFromHash = toNonEmptyString(hashParams.get("token"));
   const tokenFromQuery = toNonEmptyString(queryParams.get("token"));
   const token = tokenFromHash || tokenFromQuery;
+  const signupToken = toNonEmptyString(queryParams.get("signupToken")) || undefined;
+  const needsProfileSetup =
+    queryParams.get("needsProfileSetup")?.trim().toLowerCase() === "true";
 
   const errorCode = toNonEmptyString(queryParams.get("error")) || undefined;
   const rawMessage = toNonEmptyString(queryParams.get("message"));
@@ -141,6 +148,8 @@ export function parseOAuthCallbackResult(
 
   return {
     token: token?.replace(/^Bearer\s+/i, ""),
+    signupToken,
+    needsProfileSetup,
     errorCode,
     errorMessage,
   };

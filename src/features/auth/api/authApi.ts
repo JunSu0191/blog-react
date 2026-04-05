@@ -6,6 +6,9 @@ import type {
   CheckAvailabilityData,
   CheckNicknameRequest,
   CheckUsernameRequest,
+  CompleteSocialSignupRequest,
+  CompleteSocialSignupResponseData,
+  PendingSocialSignupData,
   ConfirmVerificationRequest,
   ConfirmVerificationResponseData,
   FindIdConfirmRequest,
@@ -28,6 +31,8 @@ const AUTH_ENDPOINT = {
   SEND_VERIFICATION: "/api/verifications/send",
   CONFIRM_VERIFICATION: "/api/verifications/confirm",
   REGISTER: "/api/auth/register",
+  OAUTH_SIGNUP_PENDING: "/api/auth/oauth/signup/pending",
+  COMPLETE_SOCIAL_SIGNUP: "/api/auth/oauth/signup/complete",
   FIND_ID_REQUEST: "/api/auth/find-id/request",
   FIND_ID_CONFIRM: "/api/auth/find-id/confirm",
   RESET_PASSWORD_REQUEST: "/api/auth/reset-password/request",
@@ -53,6 +58,18 @@ function toStatusCode(value: unknown): number | null {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+}
+
+function normalizePendingSocialSignupData(raw: unknown): PendingSocialSignupData {
+  const record = toRecord(raw) ?? {};
+  return {
+    signupToken: toText(record.signupToken) || undefined,
+    email: toText(record.email) || undefined,
+    name: toText(record.name) || undefined,
+    nickname: toText(record.nickname) || undefined,
+    username: toText(record.usernameSuggestion) || undefined,
+    authProvider: toText(record.provider) || undefined,
+  };
 }
 
 function extractErrorCode(payload: unknown): string | null {
@@ -138,6 +155,21 @@ export function confirmVerificationCode(request: ConfirmVerificationRequest) {
 export function registerAccount(request: RegisterRequest) {
   return unwrapApiData<RegisterResponseData>(
     apiClient.post(AUTH_ENDPOINT.REGISTER, request),
+  );
+}
+
+export async function getPendingSocialSignup(signupToken: string) {
+  const data = await unwrapApiData<unknown>(
+    apiClient.get(AUTH_ENDPOINT.OAUTH_SIGNUP_PENDING, {
+      params: { signupToken },
+    }),
+  );
+  return normalizePendingSocialSignupData(data);
+}
+
+export function completeSocialSignup(request: CompleteSocialSignupRequest) {
+  return unwrapApiData<CompleteSocialSignupResponseData>(
+    apiClient.post(AUTH_ENDPOINT.COMPLETE_SOCIAL_SIGNUP, request),
   );
 }
 

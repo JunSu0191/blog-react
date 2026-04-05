@@ -100,7 +100,8 @@ export default function LoginPage() {
   );
 
   const { login: doLogin, token } = useAuthContext();
-  const isSocialLoginEnabled = !import.meta.env.PROD;
+  const isSocialLoginEnabled =
+    import.meta.env.VITE_SOCIAL_LOGIN_ENABLED !== "false";
 
   // 이미 로그인되어 있다면 홈으로 리다이렉트
   useEffect(() => {

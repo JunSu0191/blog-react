@@ -14,9 +14,16 @@ export function useAuth() {
   const queryClient = useQueryClient();
   const [token, setTokenState] = useState<string | null>(() => getToken());
   const [user, setUser] = useState<User | null>(null);
-  const [isLoadingUser, setIsLoadingUser] = useState(false);
+  const [isLoadingUser, setIsLoadingUser] = useState(() => Boolean(getToken()));
 
   useEffect(() => {
+    if (!token) {
+      setUser(null);
+      setIsLoadingUser(false);
+      queryClient.removeQueries({ queryKey: userApi.AUTH_ME_QUERY_KEY });
+      return;
+    }
+
     let cancelled = false;
     setIsLoadingUser(true);
 
@@ -109,6 +116,40 @@ export function useAuth() {
     [queryClient],
   );
 
+  const refreshUser = useCallback(async () => {
+    if (!getToken()) {
+      setUser(null);
+      setIsLoadingUser(false);
+      queryClient.removeQueries({ queryKey: userApi.AUTH_ME_QUERY_KEY });
+      return null;
+    }
+
+    setIsLoadingUser(true);
+    try {
+      const me = await userApi.getMe();
+      if (!me) {
+        setUser(null);
+        queryClient.setQueryData(userApi.AUTH_ME_QUERY_KEY, null);
+        clearAuthStorage();
+        setTokenState(null);
+        return null;
+      }
+
+      setUser(me);
+      setUserId(me.id);
+      queryClient.setQueryData(userApi.AUTH_ME_QUERY_KEY, me);
+      return me;
+    } catch (error) {
+      setUser(null);
+      queryClient.removeQueries({ queryKey: userApi.AUTH_ME_QUERY_KEY });
+      clearAuthStorage();
+      setTokenState(null);
+      throw error;
+    } finally {
+      setIsLoadingUser(false);
+    }
+  }, [queryClient]);
+
   const register = useCallback(
     async (username: string, name: string, password: string) => {
       disconnect();
@@ -142,6 +183,7 @@ export function useAuth() {
     isLoadingUser,
     login,
     loginWithToken,
+    refreshUser,
     register,
     logout,
   };

@@ -10,6 +10,9 @@ const FindIdPage = lazy(() => import("../features/auth/pages/FindIdPage"));
 const ResetPasswordPage = lazy(
   () => import("../features/auth/pages/ResetPasswordPage"),
 );
+const NicknameOnboardingPage = lazy(
+  () => import("../features/auth/pages/NicknameOnboardingPage"),
+);
 const OAuthCallbackPage = lazy(
   () => import("../features/user/pages/OAuthCallbackPage"),
 );
@@ -82,6 +85,14 @@ export default function AppRouter() {
         }
       />
       <Route
+        path="/register/social"
+        element={
+          <LazyRoute>
+            <RegisterPage />
+          </LazyRoute>
+        }
+      />
+      <Route
         path="/find-id"
         element={
           <LazyRoute>
@@ -103,6 +114,16 @@ export default function AppRouter() {
           <LazyRoute>
             <OAuthCallbackPage />
           </LazyRoute>
+        }
+      />
+      <Route
+        path="/onboarding/nickname"
+        element={
+          <RequireAuth>
+            <LazyRoute>
+              <NicknameOnboardingPage />
+            </LazyRoute>
+          </RequireAuth>
         }
       />
       <Route

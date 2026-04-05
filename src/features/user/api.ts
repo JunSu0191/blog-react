@@ -24,6 +24,12 @@ export type AuthUser = {
   id: number;
   username: string;
   name: string;
+  nickname?: string;
+  displayName?: string;
+  email?: string;
+  authProvider?: string;
+  signupCompleted?: boolean;
+  needsProfileSetup?: boolean;
   role?: UserRole;
   status?: UserStatus;
   mustChangePassword?: boolean;
@@ -98,6 +104,26 @@ function normalizeAuthUser(raw: unknown): AuthUser | undefined {
 
   const username = toText(obj.username) || `user-${id}`;
   const name = toText(obj.name) || toText(obj.displayName) || username;
+  const nickname =
+    toText(obj.nickname) ??
+    toText(obj.nickName) ??
+    toText(obj.displayName);
+  const displayName =
+    toText(obj.displayName) ??
+    toText(obj.display_name) ??
+    toText(obj.nickname) ??
+    toText(obj.nickName);
+  const authProvider =
+    toText(obj.authProvider) ??
+    toText(obj.oauthProvider) ??
+    toText(obj.socialProvider) ??
+    toText(obj.provider);
+  const signupCompleted =
+    toBoolean(obj.signupCompleted) ??
+    toBoolean(obj.signup_completed);
+  const needsProfileSetup =
+    toBoolean(obj.needsProfileSetup) ??
+    toBoolean(obj.needs_profile_setup);
   const mustChangePassword =
     toBoolean(obj.mustChangePassword) ??
     toBoolean(obj.must_change_password) ??
@@ -108,6 +134,12 @@ function normalizeAuthUser(raw: unknown): AuthUser | undefined {
     id,
     username,
     name,
+    nickname,
+    displayName,
+    email: toText(obj.email),
+    authProvider,
+    signupCompleted,
+    needsProfileSetup,
     role: normalizeRole(obj.role),
     status: normalizeStatus(obj.status),
     mustChangePassword,

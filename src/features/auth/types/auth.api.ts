@@ -64,6 +64,28 @@ export type RegisterResponseData = {
   createdAt?: string;
 };
 
+export type CompleteSocialSignupRequest = {
+  signupToken: string;
+  username: string;
+  nickname: string;
+};
+
+export type CompleteSocialSignupResponseData = {
+  token?: string;
+  username?: string;
+  nickname?: string;
+  completedAt?: string;
+};
+
+export type PendingSocialSignupData = {
+  signupToken?: string;
+  email?: string;
+  name?: string;
+  nickname?: string;
+  username?: string;
+  authProvider?: string;
+};
+
 export type FindIdRequest = {
   channel: VerificationChannel;
   target: string;
