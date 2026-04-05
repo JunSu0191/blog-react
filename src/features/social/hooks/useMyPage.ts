@@ -29,6 +29,7 @@ function patchSummaryWithProfile(
   return {
     ...summary,
     name: payload.name,
+    nickname: payload.nickname,
     profile: {
       ...summary.profile,
       displayName: payload.displayName,

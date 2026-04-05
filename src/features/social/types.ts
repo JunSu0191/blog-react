@@ -17,6 +17,7 @@ export type MyPageSummary = {
   userId: number;
   username: string;
   name: string;
+  nickname: string | null;
   profile: {
     displayName: string | null;
     bio: string | null;
@@ -33,6 +34,7 @@ export type MyPageSummary = {
 
 export type MyPageProfileUpdateRequest = {
   name: string;
+  nickname: string | null;
   displayName: string | null;
   bio: string | null;
   avatarUrl: string | null;

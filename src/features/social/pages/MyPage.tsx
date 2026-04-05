@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { Globe, MapPin, PencilLine, UserRound } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuthContext } from "@/shared/context/useAuthContext";
 import {
   Button,
   Input,
@@ -46,6 +47,7 @@ function toPlainText(content?: string) {
 
 export default function MyPage() {
   const isMobile = useIsMobile();
+  const { updateUser } = useAuthContext();
   const {
     summary,
     posts,
@@ -61,6 +63,7 @@ export default function MyPage() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState<MyPageProfileUpdateRequest>({
     name: "",
+    nickname: "",
     displayName: "",
     bio: "",
     avatarUrl: "",
@@ -71,6 +74,7 @@ export default function MyPage() {
     if (!summary) return "U";
     return resolveDisplayName(
       {
+        nickname: summary.nickname,
         displayName: summary.profile.displayName,
         name: summary.name,
         username: summary.username,
@@ -85,6 +89,7 @@ export default function MyPage() {
     if (!summary || isEditingProfile) return;
     setProfileForm({
       name: summary.name || "",
+      nickname: summary.nickname || summary.profile.displayName || "",
       displayName: summary.profile.displayName || "",
       bio: summary.profile.bio || "",
       avatarUrl: summary.profile.avatarUrl || "",
@@ -121,19 +126,27 @@ export default function MyPage() {
   };
 
   const handleSaveProfile = async () => {
-    if (!profileForm.name.trim()) {
-      showErrorToast(null, "이름은 필수입니다.");
+    if (!summary) return;
+
+    const trimmedNickname = profileForm.nickname?.trim() || "";
+    if (!trimmedNickname) {
+      showErrorToast(null, "닉네임은 필수입니다.");
       return;
     }
 
     try {
       await updateProfile({
-        name: profileForm.name.trim(),
-        displayName: profileForm.displayName?.trim() || null,
+        name: summary.name,
+        nickname: trimmedNickname,
+        displayName: trimmedNickname,
         bio: profileForm.bio?.trim() || null,
         avatarUrl: profileForm.avatarUrl?.trim() || null,
         websiteUrl: profileForm.websiteUrl?.trim() || null,
         location: profileForm.location?.trim() || null,
+      });
+      updateUser({
+        nickname: trimmedNickname,
+        displayName: trimmedNickname,
       });
       setIsEditingProfile(false);
     } catch {
@@ -145,6 +158,7 @@ export default function MyPage() {
     if (!summary) return;
     setProfileForm({
       name: summary.name || "",
+      nickname: summary.nickname || summary.profile.displayName || "",
       displayName: summary.profile.displayName || "",
       bio: summary.profile.bio || "",
       avatarUrl: summary.profile.avatarUrl || "",
@@ -194,13 +208,8 @@ export default function MyPage() {
                 {visibleDisplayName}
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                아이디/핸들 @{summary.username}
+                아이디 @{summary.username}
               </p>
-              {summary.name && summary.name !== visibleDisplayName ? (
-                <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  이름 {summary.name}
-                </p>
-              ) : null}
               {summary.profile.bio && (
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600 dark:text-slate-300">
                   {summary.profile.bio}
@@ -281,18 +290,11 @@ export default function MyPage() {
         {isEditingProfile && (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Input
-              value={profileForm.name}
+              value={profileForm.nickname ?? ""}
               onChange={(event) =>
-                handleProfileFieldChange("name", event.target.value)
+                handleProfileFieldChange("nickname", event.target.value)
               }
-              placeholder="이름"
-            />
-            <Input
-              value={profileForm.displayName ?? ""}
-              onChange={(event) =>
-                handleProfileFieldChange("displayName", event.target.value)
-              }
-              placeholder="닉네임 (표시 이름)"
+              placeholder="닉네임"
             />
             <Input
               value={profileForm.avatarUrl ?? ""}
@@ -623,9 +625,8 @@ export default function MyPage() {
                 프로필 상태
               </p>
               <div className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-                <p>이름: {summary.name}</p>
-                <p>닉네임: {summary.profile.displayName || "-"}</p>
-                <p>아이디/핸들: @{summary.username}</p>
+                <p>닉네임: {summary.nickname || summary.profile.displayName || "-"}</p>
+                <p>아이디: @{summary.username}</p>
                 <p>웹사이트: {summary.profile.websiteUrl || "-"}</p>
                 <p>위치: {summary.profile.location || "-"}</p>
               </div>

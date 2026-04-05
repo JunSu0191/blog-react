@@ -145,6 +145,11 @@ function normalizeMyPageSummary(raw: unknown): MyPageSummary {
       0,
     username,
     name,
+    nickname: toNullableText(
+      pickText(obj, ["nickname", "nickName"]) ??
+        pickText(user, ["nickname", "nickName"]) ??
+        pickText(profile, ["nickname", "nickName", "displayName", "display_name"]),
+    ),
     profile: {
       displayName: toNullableText(
         pickText(profile, [
