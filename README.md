@@ -264,14 +264,16 @@ npm run preview
 ## 커밋 컨벤션
 
 ```txt
-feat(scope): 기능 추가
-fix(scope): 버그 수정
-refactor(scope): 구조 개선
+feat(domaind): 핵심 요약
+fix(domaind): 핵심 요약
+refactor(domaind): 핵심 요약
 ```
+
+상세 규칙은 [docs/commit-message-convention.md](docs/commit-message-convention.md)를 기준으로 한다.
 
 예시:
 
 ```txt
-feat(chat): 실시간 미읽음 동기화 추가
+feat(chat): 실시간 미읽음 동기화 개선
 fix(auth): /auth/me 인증 헤더 처리 정리
 ```
