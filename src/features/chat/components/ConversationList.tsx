@@ -1,4 +1,4 @@
-import { MoreHorizontal } from "lucide-react";
+import { BellOff, MoreHorizontal, Pin } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -29,6 +29,8 @@ type ConversationListProps = {
   isLoading?: boolean;
   searchKeyword?: string;
   resurfacedThreadIds?: Set<number>;
+  emptyTitle?: string;
+  emptyDescription?: string;
 };
 
 function formatTime(raw?: string) {
@@ -85,6 +87,8 @@ export default function ConversationList({
   isLoading,
   searchKeyword = "",
   resurfacedThreadIds,
+  emptyTitle = "대화방이 없습니다.",
+  emptyDescription = "새 대화를 시작하면 여기에 최근 대화가 정리됩니다.",
 }: ConversationListProps) {
   const filteredConversations = conversations.filter((conversation) =>
     matchesConversationSearch(conversation, searchKeyword),
@@ -99,9 +103,19 @@ export default function ConversationList({
   }
 
   if (filteredConversations.length === 0) {
+    const isSearchResult = Boolean(searchKeyword.trim());
     return (
-      <div className="p-4 text-sm text-slate-500 dark:text-slate-400">
-        {searchKeyword.trim() ? "검색 결과가 없습니다." : "대화방이 없습니다."}
+      <div className="p-4">
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center dark:border-slate-700 dark:bg-slate-900/70">
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            {isSearchResult ? "검색 결과가 없습니다." : emptyTitle}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {isSearchResult
+              ? "다른 제목이나 참여자 이름으로 다시 찾아보세요."
+              : emptyDescription}
+          </p>
+        </div>
       </div>
     );
   }
@@ -125,16 +139,21 @@ export default function ConversationList({
         const canClearMyMessages = isDirectConversation(conversation);
         const canLeaveGroup = isGroupConversation(conversation);
         const isResurfaced = Boolean(resurfacedThreadIds?.has(conversation.id));
+        const hasUnread = Boolean(unreadCountText);
+        const previewText =
+          conversation.lastMessage?.trim() || "대화를 시작해보세요.";
 
         return (
           <ContextMenu key={conversation.id}>
             <ContextMenuTrigger asChild>
               <div
                 className={[
-                  "flex items-center gap-2 pr-2",
+                  "flex items-center gap-2 border-l-2 pr-2 transition-colors duration-200",
                   isActive
-                    ? "bg-blue-50/80 dark:bg-blue-950/40"
-                    : "hover:bg-slate-50 dark:hover:bg-slate-800/60",
+                    ? "border-l-blue-500 bg-blue-50/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:bg-blue-950/35 dark:shadow-none"
+                    : hasUnread
+                      ? "border-l-transparent bg-slate-50/90 dark:bg-slate-900/80"
+                      : "border-l-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60",
                 ].join(" ")}
               >
                 <button
@@ -142,7 +161,16 @@ export default function ConversationList({
                   onClick={() => onSelect(conversation.id)}
                   className="touch-manipulation flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-[transform,background-color] duration-150 ease-out motion-safe:active:translate-y-[1px] motion-safe:active:scale-[0.985]"
                 >
-                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  <span
+                    className={[
+                      "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-black",
+                      isActive
+                        ? "bg-blue-600 text-white"
+                        : hasUnread
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-950/45 dark:text-blue-300"
+                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                    ].join(" ")}
+                  >
                     {displayMeta.initial}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -162,6 +190,17 @@ export default function ConversationList({
                             새 메시지
                           </span>
                         )}
+                        {conversation.pinned && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                            <Pin className="h-3 w-3" aria-hidden="true" />
+                            고정
+                          </span>
+                        )}
+                        {conversation.muted && (
+                          <span className="inline-flex items-center justify-center rounded-full bg-slate-200 p-1 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                            <BellOff className="h-3 w-3" aria-hidden="true" />
+                          </span>
+                        )}
                       </div>
                       <span className="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">
                         {formatTime(conversation.updatedAt)}
@@ -169,7 +208,7 @@ export default function ConversationList({
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-2">
                       <p className="line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
-                        {conversation.lastMessage || "최근 메시지가 없습니다."}
+                        {previewText}
                       </p>
                       {unreadCountText && (
                         <span className="shrink-0 rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-semibold text-white">

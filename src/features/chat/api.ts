@@ -76,6 +76,16 @@ function trimText(value?: string | null): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function toBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return undefined;
+}
+
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -371,6 +381,23 @@ function normalizeThread(raw: unknown, fallbackType?: ChatThreadType): ChatThrea
     typeof explicitHidden === "boolean"
       ? explicitHidden
       : membershipState === CHAT_MEMBERSHIP_STATE.HIDDEN;
+  const pinned =
+    toBoolean(obj.pinned) ??
+    toBoolean(obj.isPinned) ??
+    toBoolean(obj.pinnedForMe);
+  const muted =
+    toBoolean(obj.muted) ??
+    toBoolean(obj.isMuted) ??
+    toBoolean(obj.mutedForMe);
+  const draftMessage = trimText(
+    toText(obj.draftMessage) || toText(obj.draft_message),
+  );
+  const otherUserPresence = trimText(
+    toText(obj.otherUserPresence) || toText(obj.other_user_presence),
+  );
+  const lastReadMessageId =
+    toFiniteNumber(obj.lastReadMessageId) ??
+    toFiniteNumber(obj.last_read_message_id);
 
   return {
     id,
@@ -391,6 +418,11 @@ function normalizeThread(raw: unknown, fallbackType?: ChatThreadType): ChatThrea
     participantNames: participantNames.length > 0 ? participantNames : undefined,
     membershipState,
     hidden,
+    pinned,
+    muted,
+    draftMessage,
+    otherUserPresence,
+    lastReadMessageId,
     groupId:
       toFiniteNumber(obj.groupId) ??
       toFiniteNumber(obj.roomId) ??

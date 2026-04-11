@@ -44,6 +44,11 @@ export type ChatThread = {
   participantNames?: string[];
   membershipState?: ChatMembershipState;
   hidden?: boolean;
+  pinned?: boolean;
+  muted?: boolean;
+  draftMessage?: string;
+  otherUserPresence?: string;
+  lastReadMessageId?: number;
   groupId?: number;
 };
 
@@ -55,6 +60,8 @@ export type ChatMessage = {
   content: string;
   createdAt?: string;
   clientMsgId?: string;
+  messageType?: string;
+  deliveryStatus?: string;
 };
 
 export type ChatMessagesPage = {
@@ -97,4 +104,3 @@ export type CreateGroupInviteRequest = {
   groupId: number;
   targetUserIds: number[];
 };
-

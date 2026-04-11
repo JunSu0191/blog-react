@@ -10,6 +10,10 @@ import {
   setUserId,
 } from "@/shared/lib/auth";
 import { parseErrorMessage } from "@/shared/lib/errorParser";
+import {
+  useBodyScrollLock,
+  useMobileVisualViewportHeight,
+} from "@/shared/hooks/useMobileOverlay";
 import { unsubscribeChat } from "@/shared/socket/stompClient";
 import SurfaceCard from "@/shared/ui/SurfaceCard";
 import { ActionDialog, Button, Input } from "@/shared/ui";
@@ -22,7 +26,8 @@ import {
   type FriendRelationStatus,
 } from "../chat.enums";
 import ConversationList from "../components/ConversationList";
-import ChatRoom from "../components/ChatRoom";
+import DesktopChatRoom from "../components/DesktopChatRoom";
+import MobileChatRoom from "../components/MobileChatRoom";
 import { canStartDirectChat } from "../chatPolicies";
 import {
   useAcceptFriendRequest,
@@ -68,6 +73,7 @@ const MOBILE_BREAKPOINT = 1024;
 const MOBILE_CHAT_LIST_VIEWPORT_OFFSET = "calc(10.5rem + env(safe-area-inset-bottom))";
 const MOBILE_CHAT_LIST_BOTTOM_PADDING = "calc(5.5rem + env(safe-area-inset-bottom))";
 const MOBILE_SHEET_EXIT_DURATION_MS = 220;
+const MOBILE_THREAD_TOP_OFFSET_PX = 8;
 
 const SIDEBAR_SECTIONS: Array<{
   key: ChatSidebarSection;
@@ -126,60 +132,6 @@ function useIsMobileChatLayout() {
   }, []);
 
   return isMobile;
-}
-
-function useMobileVisualViewportHeight(active: boolean) {
-  const [viewportHeight, setViewportHeight] = useState(() =>
-    typeof window === "undefined" ? 0 : Math.round(window.innerHeight),
-  );
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!active) return;
-
-    const measure = () =>
-      Math.max(
-        1,
-        Math.round(window.visualViewport?.height ?? window.innerHeight),
-      );
-    const baseHeightRef = { current: measure() };
-    const visualViewport = window.visualViewport;
-    const updateViewport = () => {
-      const measuredHeight = measure();
-      const keyboardLikelyOpen = baseHeightRef.current - measuredHeight > 120;
-      // 키보드가 열리면 마지막 "키보드 닫힘" 높이로 고정한다.
-      const normalizedHeight = keyboardLikelyOpen
-        ? baseHeightRef.current
-        : measuredHeight;
-      if (!keyboardLikelyOpen) baseHeightRef.current = measuredHeight;
-
-      setViewportHeight((prev) =>
-        prev === normalizedHeight ? prev : normalizedHeight,
-      );
-    };
-
-    const handleOrientationChange = () => {
-      const measuredHeight = measure();
-      baseHeightRef.current = measuredHeight;
-      setViewportHeight((prev) =>
-        prev === measuredHeight ? prev : measuredHeight,
-      );
-      window.requestAnimationFrame(updateViewport);
-    };
-
-    updateViewport();
-    visualViewport?.addEventListener("resize", updateViewport);
-    window.addEventListener("resize", updateViewport);
-    window.addEventListener("orientationchange", handleOrientationChange);
-
-    return () => {
-      visualViewport?.removeEventListener("resize", updateViewport);
-      window.removeEventListener("resize", updateViewport);
-      window.removeEventListener("orientationchange", handleOrientationChange);
-    };
-  }, [active]);
-
-  return viewportHeight;
 }
 
 function toActionErrorMessage(error: unknown, fallback: string) {
@@ -275,7 +227,6 @@ export default function ChatPage() {
 
   const [inlineErrors, setInlineErrors] = useState<InlineActionErrors>({});
   const retryActionsRef = useRef<Map<string, () => Promise<void>>>(new Map());
-  const lockedScrollYRef = useRef(0);
   const mobileSheetDragStartYRef = useRef<number | null>(null);
   const mobileSheetDragDistanceRef = useRef(0);
   const mobileSheetCloseTimerRef = useRef<number | null>(null);
@@ -1023,6 +974,51 @@ export default function ChatPage() {
           친구, 개인/그룹 채팅, 초대를 한 번에 관리합니다.
         </p>
       </div>
+      <div className="grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          onClick={openFriendAddModal}
+          className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left transition hover:border-blue-200 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/30"
+        >
+          <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100">
+            친구 추가
+          </p>
+          <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+            1:1 시작
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={openCreateGroupModal}
+          className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left transition hover:border-blue-200 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/30"
+        >
+          <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100">
+            새 그룹
+          </p>
+          <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+            그룹 대화
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => selectSidebarSection(CHAT_SIDEBAR_SECTION.INVITES)}
+          className={[
+            "rounded-xl border px-2.5 py-2 text-left transition",
+            pendingInvites.length > 0
+              ? "border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/30 dark:hover:bg-rose-950/45"
+              : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-blue-900/60 dark:hover:bg-blue-950/30",
+          ].join(" ")}
+        >
+          <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100">
+            초대함
+          </p>
+          <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+            {pendingInvites.length > 0
+              ? `${pendingInvites.length}개 대기`
+              : "확인하기"}
+          </p>
+        </button>
+      </div>
       <div className="relative grid grid-cols-4 gap-1 overflow-hidden rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
         <span
           className="pointer-events-none absolute inset-y-1 left-1 rounded-lg bg-white shadow-sm transition-transform duration-300 ease-out dark:bg-slate-900"
@@ -1339,6 +1335,8 @@ export default function ChatPage() {
           isLoading={isDirectThreadsLoading}
           searchKeyword={directSearchKeyword}
           resurfacedThreadIds={resurfacedThreadIds}
+          emptyTitle="아직 시작한 1:1 대화가 없습니다."
+          emptyDescription="친구 목록에서 1:1 시작을 눌러 첫 대화를 열어보세요."
         />
       </SurfaceCard>
 
@@ -1426,6 +1424,8 @@ export default function ChatPage() {
           }
           isLoading={isGroupThreadsLoading}
           searchKeyword={groupSearchKeyword}
+          emptyTitle="참여 중인 그룹 채팅이 없습니다."
+          emptyDescription="상단의 새 그룹 버튼으로 그룹 대화를 만들 수 있습니다."
         />
       </SurfaceCard>
     </div>
@@ -1443,7 +1443,7 @@ export default function ChatPage() {
 
       {!isInvitesLoading && pendingInvites.length === 0 && (
         <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-          대기 중인 그룹 초대가 없습니다.
+          새로운 초대가 없습니다. 친구와 그룹을 만들면 여기서 초대를 확인할 수 있습니다.
         </p>
       )}
 
@@ -1508,7 +1508,10 @@ export default function ChatPage() {
           ? groupSection
           : invitesSection;
 
-  const selectedThreadType = selectedThread?.type;
+  const selectedThreadType =
+    typeof selectedThread?.type === "string"
+      ? selectedThread.type.toUpperCase()
+      : undefined;
   const isMobileThreadOpen = isMobile && Boolean(selectedThread);
   const isFriendAddModalVisible =
     isFriendAddModalOpen || closingMobileSheet === "friend-add";
@@ -1531,49 +1534,14 @@ export default function ChatPage() {
   const mobileViewportHeight = useMobileVisualViewportHeight(isMobileThreadOpen);
   const mobileThreadShellStyle = isMobileThreadOpen
     ? {
-        top: "0px",
-        height: `${mobileViewportHeight}px`,
+        top: `${MOBILE_THREAD_TOP_OFFSET_PX}px`,
+        height: `${Math.max(1, mobileViewportHeight - MOBILE_THREAD_TOP_OFFSET_PX)}px`,
+        maxHeight: `${Math.max(1, mobileViewportHeight - MOBILE_THREAD_TOP_OFFSET_PX)}px`,
       }
     : undefined;
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (typeof window === "undefined") return;
-    if (!isMobileThreadOpen && !isAnyMobileModalOpen) return;
-
-    const prevHtmlOverflow = document.documentElement.style.overflow;
-    const prevHtmlOverscroll = document.documentElement.style.overscrollBehavior;
-    const prevBodyOverflow = document.body.style.overflow;
-    const prevBodyOverscroll = document.body.style.overscrollBehavior;
-    const prevBodyPosition = document.body.style.position;
-    const prevBodyTop = document.body.style.top;
-    const prevBodyWidth = document.body.style.width;
-
-    document.documentElement.style.overflow = "hidden";
-    document.documentElement.style.overscrollBehavior = "none";
-    document.body.style.overflow = "hidden";
-    document.body.style.overscrollBehavior = "none";
-
-    if (isAnyMobileModalOpen) {
-      lockedScrollYRef.current = window.scrollY;
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${lockedScrollYRef.current}px`;
-      document.body.style.width = "100%";
-    }
-
-    return () => {
-      document.documentElement.style.overflow = prevHtmlOverflow;
-      document.documentElement.style.overscrollBehavior = prevHtmlOverscroll;
-      document.body.style.overflow = prevBodyOverflow;
-      document.body.style.overscrollBehavior = prevBodyOverscroll;
-      document.body.style.position = prevBodyPosition;
-      document.body.style.top = prevBodyTop;
-      document.body.style.width = prevBodyWidth;
-      if (isAnyMobileModalOpen) {
-        window.scrollTo({ top: lockedScrollYRef.current, behavior: "auto" });
-      }
-    };
-  }, [isAnyMobileModalOpen, isMobileThreadOpen]);
+  useBodyScrollLock(isMobileThreadOpen || isAnyMobileModalOpen, {
+    lockScrollPosition: isMobileThreadOpen || isAnyMobileModalOpen,
+  });
 
   const closeActiveMobileSheet = () => {
     if (inviteTargetThread) {
@@ -1614,46 +1582,76 @@ export default function ChatPage() {
   };
 
   const chatRoomPanel = selectedThread ? (
-    <ChatRoom
-      conversationId={selectedThread.id}
-      currentUserId={currentUserId}
-      conversationTitle={selectedThreadTitle || "이름 없는 대화"}
-      conversationType={selectedThread.type}
-      userDisplayNames={userDisplayNames}
-      onBack={isMobile ? clearSelectedThread : undefined}
-      onRequestHideThread={
-        selectedThreadType === CHAT_THREAD_TYPE.DIRECT ? openHideDialog : undefined
-      }
-      onRequestClearMyMessages={
-        selectedThreadType === CHAT_THREAD_TYPE.DIRECT ? openClearDialog : undefined
-      }
-      onRequestLeaveGroup={
-        selectedThreadType === CHAT_THREAD_TYPE.GROUP ? openLeaveGroupDialog : undefined
-      }
-      onRequestInviteMembers={
-        selectedThreadType === CHAT_THREAD_TYPE.GROUP
-          ? openGroupInviteModal
-          : undefined
-      }
-      isLeavingGroup={
-        selectedThreadType === CHAT_THREAD_TYPE.GROUP &&
-        leaveGroupMutation.isPending &&
-        leaveGroupMutation.variables?.threadId === selectedThread.id
-      }
-      isHidingThread={
-        hideThreadMutation.isPending && hideThreadMutation.variables === selectedThread.id
-      }
-      isClearingMyMessages={
-        clearMyMessagesMutation.isPending &&
-        clearMyMessagesMutation.variables === selectedThread.id
-      }
-      isMobileFullscreen={isMobile}
-      className={
-        isMobile
-          ? "mt-2 h-[calc(100%-0.5rem)] rounded-none border-x-0 border-t-0"
-          : undefined
-      }
-    />
+    isMobile ? (
+      <MobileChatRoom
+        conversationId={selectedThread.id}
+        currentUserId={currentUserId}
+        conversationTitle={selectedThreadTitle || "이름 없는 대화"}
+        conversationType={selectedThread.type}
+        userDisplayNames={userDisplayNames}
+        onBack={clearSelectedThread}
+        onRequestHideThread={
+          selectedThreadType === CHAT_THREAD_TYPE.DIRECT ? openHideDialog : undefined
+        }
+        onRequestClearMyMessages={
+          selectedThreadType === CHAT_THREAD_TYPE.DIRECT ? openClearDialog : undefined
+        }
+        onRequestLeaveGroup={
+          selectedThreadType === CHAT_THREAD_TYPE.GROUP ? openLeaveGroupDialog : undefined
+        }
+        onRequestInviteMembers={
+          selectedThreadType === CHAT_THREAD_TYPE.GROUP
+            ? openGroupInviteModal
+            : undefined
+        }
+        isLeavingGroup={
+          selectedThreadType === CHAT_THREAD_TYPE.GROUP &&
+          leaveGroupMutation.isPending &&
+          leaveGroupMutation.variables?.threadId === selectedThread.id
+        }
+        isHidingThread={
+          hideThreadMutation.isPending && hideThreadMutation.variables === selectedThread.id
+        }
+        isClearingMyMessages={
+          clearMyMessagesMutation.isPending &&
+          clearMyMessagesMutation.variables === selectedThread.id
+        }
+      />
+    ) : (
+      <DesktopChatRoom
+        conversationId={selectedThread.id}
+        currentUserId={currentUserId}
+        conversationTitle={selectedThreadTitle || "이름 없는 대화"}
+        conversationType={selectedThread.type}
+        userDisplayNames={userDisplayNames}
+        onRequestHideThread={
+          selectedThreadType === CHAT_THREAD_TYPE.DIRECT ? openHideDialog : undefined
+        }
+        onRequestClearMyMessages={
+          selectedThreadType === CHAT_THREAD_TYPE.DIRECT ? openClearDialog : undefined
+        }
+        onRequestLeaveGroup={
+          selectedThreadType === CHAT_THREAD_TYPE.GROUP ? openLeaveGroupDialog : undefined
+        }
+        onRequestInviteMembers={
+          selectedThreadType === CHAT_THREAD_TYPE.GROUP
+            ? openGroupInviteModal
+            : undefined
+        }
+        isLeavingGroup={
+          selectedThreadType === CHAT_THREAD_TYPE.GROUP &&
+          leaveGroupMutation.isPending &&
+          leaveGroupMutation.variables?.threadId === selectedThread.id
+        }
+        isHidingThread={
+          hideThreadMutation.isPending && hideThreadMutation.variables === selectedThread.id
+        }
+        isClearingMyMessages={
+          clearMyMessagesMutation.isPending &&
+          clearMyMessagesMutation.variables === selectedThread.id
+        }
+      />
+    )
   ) : (
     <SurfaceCard className="flex h-[72vh] items-center justify-center rounded-2xl border border-slate-200 bg-white text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
       친구 목록에서 1:1을 시작하거나, 좌측 섹션에서 대화를 선택하세요.

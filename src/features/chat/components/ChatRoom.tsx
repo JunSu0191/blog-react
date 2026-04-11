@@ -1,7 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { SendHorizontal } from "lucide-react";
+import {
+  ChevronLeft,
+  EllipsisVertical,
+  EyeOff,
+  LogOut,
+  SendHorizontal,
+  Trash2,
+  UserPlus,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui";
 import { ActionDialog, Button } from "@/shared/ui";
 import useActionDialog from "@/shared/hooks/useActionDialog";
 import {
@@ -101,6 +116,7 @@ export default function ChatRoom({
   } | null>(null);
   const [composerValue, setComposerValue] = useState("");
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>([]);
+  const [isMobileActionMenuOpen, setIsMobileActionMenuOpen] = useState(false);
   const noticeDialog = useActionDialog({ defaultTitle: "안내" });
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
@@ -112,6 +128,17 @@ export default function ChatRoom({
   const isGroupConversation =
     typeof conversationType === "string" &&
     conversationType.toUpperCase() === CHAT_THREAD_TYPE.GROUP;
+  const conversationMetaLabel = isGroupConversation
+    ? "그룹 대화"
+    : isDirectConversation
+      ? "1:1 메시지"
+      : "대화방";
+  const canHideThread = Boolean(onRequestHideThread);
+  const canClearMyMessages = Boolean(onRequestClearMyMessages);
+  const canInviteMembers = Boolean(onRequestInviteMembers);
+  const canLeaveGroup = Boolean(onRequestLeaveGroup);
+  const hasConversationMenu =
+    isGroupConversation || canHideThread || canClearMyMessages;
 
   const baseMessages = useMemo(() => {
     const pages = data?.pages || [];
@@ -155,6 +182,14 @@ export default function ChatRoom({
     return last?.localId ?? null;
   }, [messages]);
 
+  const isNearBottom = useCallback(() => {
+    const listElement = listRef.current;
+    if (!listElement) return true;
+    const remaining =
+      listElement.scrollHeight - listElement.scrollTop - listElement.clientHeight;
+    return remaining < 96;
+  }, []);
+
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const listElement = listRef.current;
     if (!listElement) return;
@@ -178,6 +213,7 @@ export default function ChatRoom({
   useEffect(() => {
     setLocalMessages([]);
     setComposerValue("");
+    setIsMobileActionMenuOpen(false);
     enterScrollPendingRef.current = true;
     pendingTimeoutRef.current.forEach((timeoutId) =>
       window.clearTimeout(timeoutId),
@@ -193,6 +229,11 @@ export default function ChatRoom({
       pendingTimeoutRef.current.clear();
     };
   }, []);
+
+  useEffect(() => {
+    if (isMobileFullscreen) return;
+    setIsMobileActionMenuOpen(false);
+  }, [isMobileFullscreen]);
 
   useEffect(() => {
     if (!enterScrollPendingRef.current) return;
@@ -223,14 +264,41 @@ export default function ChatRoom({
     }
 
     const hasNewTailMessage = lastMessageKeyRef.current !== latestMessageKey;
-    if (hasNewTailMessage && !isFetchingNextPage) {
+    if (hasNewTailMessage && !isFetchingNextPage && isNearBottom()) {
       window.requestAnimationFrame(() => {
         scrollToBottom("auto");
       });
     }
 
     lastMessageKeyRef.current = latestMessageKey;
-  }, [isFetchingNextPage, latestMessageKey, scrollToBottom]);
+  }, [isFetchingNextPage, isNearBottom, latestMessageKey, scrollToBottom]);
+
+  useEffect(() => {
+    if (!isMobileFullscreen) return;
+    if (typeof window === "undefined") return;
+
+    const alignViewportIfNeeded = () => {
+      if (!isNearBottom()) return;
+      window.requestAnimationFrame(() => {
+        scrollToBottom("auto");
+      });
+    };
+
+    const handleComposerFocus = () => {
+      window.setTimeout(alignViewportIfNeeded, 120);
+    };
+
+    const composer = composerRef.current;
+    const visualViewport = window.visualViewport;
+
+    composer?.addEventListener("focus", handleComposerFocus);
+    visualViewport?.addEventListener("resize", alignViewportIfNeeded);
+
+    return () => {
+      composer?.removeEventListener("focus", handleComposerFocus);
+      visualViewport?.removeEventListener("resize", alignViewportIfNeeded);
+    };
+  }, [isMobileFullscreen, isNearBottom, scrollToBottom]);
 
   useEffect(() => {
     const lastReadMessageId = [...baseMessages]
@@ -298,7 +366,9 @@ export default function ChatRoom({
         ];
       });
       window.requestAnimationFrame(() => {
-        scrollToBottom("auto");
+        if (isNearBottom()) {
+          scrollToBottom("auto");
+        }
       });
 
       queryClient.invalidateQueries({
@@ -342,7 +412,7 @@ export default function ChatRoom({
     });
 
     return unsubscribe;
-  }, [conversationId, currentUserId, queryClient, scrollToBottom]);
+  }, [conversationId, currentUserId, isNearBottom, queryClient, scrollToBottom]);
 
   const handleScroll = useCallback(() => {
     const element = listRef.current;
@@ -449,6 +519,175 @@ export default function ChatRoom({
     }
   }, [focusComposer, handleSend, isMobileFullscreen]);
 
+  const handleMobileMenuAction = useCallback((action: () => void) => {
+    setIsMobileActionMenuOpen(false);
+    action();
+  }, []);
+
+  const desktopConversationMenu = hasConversationMenu ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+          aria-label="대화방 메뉴"
+        >
+          <EllipsisVertical className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={8} className="w-52">
+        {isGroupConversation && onRequestInviteMembers && (
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
+              onRequestInviteMembers(conversationId);
+            }}
+          >
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
+            멤버 초대
+          </DropdownMenuItem>
+        )}
+        {onRequestHideThread && (
+          <DropdownMenuItem
+            disabled={isHidingThread}
+            onSelect={(event) => {
+              event.preventDefault();
+              onRequestHideThread(conversationId);
+            }}
+          >
+            <EyeOff className="h-4 w-4" aria-hidden="true" />
+            {isHidingThread ? "숨기는 중..." : "대화 숨기기"}
+          </DropdownMenuItem>
+        )}
+        {isDirectConversation && onRequestClearMyMessages && (
+          <DropdownMenuItem
+            className="text-rose-600 focus:text-rose-600 dark:text-rose-400 dark:focus:text-rose-300"
+            disabled={isClearingMyMessages}
+            onSelect={(event) => {
+              event.preventDefault();
+              onRequestClearMyMessages(conversationId);
+            }}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+            {isClearingMyMessages ? "삭제 중..." : "내 기록 삭제"}
+          </DropdownMenuItem>
+        )}
+        {isGroupConversation && onRequestLeaveGroup && (
+          <DropdownMenuItem
+            className="text-rose-600 focus:text-rose-600 dark:text-rose-400 dark:focus:text-rose-300"
+            disabled={isLeavingGroup}
+            onSelect={(event) => {
+              event.preventDefault();
+              onRequestLeaveGroup(conversationId);
+            }}
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            {isLeavingGroup ? "나가는 중..." : "그룹 나가기"}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : null;
+
+  const mobileConversationMenu =
+    isMobileFullscreen &&
+    hasConversationMenu &&
+    typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className={[
+              "fixed inset-0 z-[220]",
+              isMobileActionMenuOpen ? "pointer-events-auto" : "pointer-events-none",
+            ].join(" ")}
+            aria-hidden={!isMobileActionMenuOpen}
+          >
+            <button
+              type="button"
+              className={[
+                "absolute inset-0 bg-slate-950/45 transition-opacity duration-200",
+                isMobileActionMenuOpen ? "opacity-100" : "opacity-0",
+              ].join(" ")}
+              onClick={() => setIsMobileActionMenuOpen(false)}
+              aria-label="메뉴 닫기"
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="대화방 메뉴"
+              className={[
+                "absolute inset-x-0 bottom-0 rounded-t-3xl border border-slate-200 bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl transition-transform duration-200 dark:border-slate-700 dark:bg-slate-900",
+                isMobileActionMenuOpen ? "translate-y-0" : "translate-y-full",
+              ].join(" ")}
+            >
+              <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
+              <div className="space-y-2">
+                {isGroupConversation && canInviteMembers && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleMobileMenuAction(() => onRequestInviteMembers?.(conversationId))
+                    }
+                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <UserPlus className="h-4 w-4" aria-hidden="true" />
+                    멤버 초대
+                  </button>
+                )}
+                {canHideThread && (
+                  <button
+                    type="button"
+                    disabled={isHidingThread}
+                    onClick={() =>
+                      handleMobileMenuAction(() => onRequestHideThread?.(conversationId))
+                    }
+                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                    {isHidingThread ? "숨기는 중..." : "대화 숨기기"}
+                  </button>
+                )}
+                {isDirectConversation && canClearMyMessages && (
+                  <button
+                    type="button"
+                    disabled={isClearingMyMessages}
+                    onClick={() =>
+                      handleMobileMenuAction(() =>
+                        onRequestClearMyMessages?.(conversationId),
+                      )
+                    }
+                    className="flex w-full items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60 dark:border-rose-900/60 dark:bg-rose-950/35 dark:text-rose-300 dark:hover:bg-rose-950/55"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    {isClearingMyMessages ? "삭제 중..." : "내 기록 삭제"}
+                  </button>
+                )}
+                {isGroupConversation && canLeaveGroup && (
+                  <button
+                    type="button"
+                    disabled={isLeavingGroup}
+                    onClick={() =>
+                      handleMobileMenuAction(() => onRequestLeaveGroup?.(conversationId))
+                    }
+                    className="flex w-full items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60 dark:border-rose-900/60 dark:bg-rose-950/35 dark:text-rose-300 dark:hover:bg-rose-950/55"
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                    {isLeavingGroup ? "나가는 중..." : "그룹 나가기"}
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileActionMenuOpen(false)}
+                className="mt-3 flex w-full items-center justify-center rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                닫기
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div
       className={cn(
@@ -475,7 +714,7 @@ export default function ChatRoom({
                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 lg:hidden dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                 aria-label="대화 목록으로 이동"
               >
-                ←
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
               </button>
             )}
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">
@@ -485,60 +724,24 @@ export default function ChatRoom({
               <p className="line-clamp-1 text-sm font-bold text-slate-900 dark:text-slate-100">
                 {conversationTitle || "이름 없는 대화방"}
               </p>
+              <p className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                {conversationMetaLabel}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {isGroupConversation && onRequestInviteMembers && (
-              <Button
+          {hasConversationMenu &&
+            (isMobileFullscreen ? (
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onRequestInviteMembers(conversationId)}
-                className="h-8 rounded-lg border-blue-200 bg-white px-2.5 text-xs font-bold text-blue-700 hover:bg-blue-50 dark:border-blue-900/70 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-950/30"
+                onClick={() => setIsMobileActionMenuOpen(true)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                aria-label="대화방 메뉴"
               >
-                멤버 초대
-              </Button>
-            )}
-            {isGroupConversation && onRequestLeaveGroup && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onRequestLeaveGroup(conversationId)}
-                isLoading={isLeavingGroup}
-                loadingText="나가는 중..."
-                className="h-8 rounded-lg border-rose-200 bg-white px-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/30"
-              >
-                나가기
-              </Button>
-            )}
-            {onRequestHideThread && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onRequestHideThread(conversationId)}
-                isLoading={isHidingThread}
-                loadingText="숨기는 중..."
-                className="h-8 rounded-lg border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                숨기기
-              </Button>
-            )}
-            {isDirectConversation && onRequestClearMyMessages && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onRequestClearMyMessages(conversationId)}
-                isLoading={isClearingMyMessages}
-                loadingText="삭제 중..."
-                className="h-8 rounded-lg border-rose-200 bg-white px-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:bg-slate-900 dark:text-rose-300 dark:hover:bg-rose-950/30"
-              >
-                내 기록 삭제
-              </Button>
-            )}
-          </div>
+                <EllipsisVertical className="h-4 w-4" aria-hidden="true" />
+              </button>
+            ) : (
+              desktopConversationMenu
+            ))}
         </div>
       </div>
 
@@ -704,6 +907,7 @@ export default function ChatRoom({
       <ActionDialog
         {...noticeDialog.dialogProps}
       />
+      {mobileConversationMenu}
     </div>
   );
 }
