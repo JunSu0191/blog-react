@@ -17,6 +17,8 @@ import {
   fetchPostById,
   fetchPosts,
   fetchRelatedPosts,
+  fetchSeriesById,
+  fetchSeriesList,
   getMyPagePostList,
   getMyPostLikeStatus,
   getPostDraft,
@@ -42,6 +44,8 @@ import type {
   PostSummary,
   PostUpdateRequest,
   PostWriteRequest,
+  SeriesDetail,
+  SeriesSummary,
 } from "./types/api";
 
 type QueryOptions = {
@@ -86,6 +90,23 @@ export function usePostCategories(options?: QueryOptions) {
     queryKey: ["posts", "categories"],
     queryFn: () => fetchPostCategories(),
     enabled: options?.enabled ?? true,
+  });
+}
+
+export function useSeriesList(options?: QueryOptions) {
+  return useQuery<SeriesSummary[], ApiError>({
+    queryKey: ["series", "list"],
+    queryFn: () => fetchSeriesList(),
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useSeriesDetail(seriesId: number, options?: QueryOptions) {
+  return useQuery<SeriesDetail, ApiError>({
+    queryKey: ["series", "detail", seriesId],
+    queryFn: () => fetchSeriesById(seriesId),
+    enabled:
+      (options?.enabled ?? true) && Number.isFinite(seriesId) && seriesId > 0,
   });
 }
 
@@ -156,6 +177,9 @@ export function useSavePostDraft() {
         title: request.title,
         subtitle: request.subtitle,
         category: request.category,
+        seriesId: request.seriesId,
+        seriesTitle: request.seriesTitle,
+        seriesOrder: request.seriesOrder,
         tags: request.tags,
         thumbnailUrl: request.thumbnailUrl,
         contentJson: request.contentJson,
@@ -193,6 +217,7 @@ export function usePublishPost() {
     mutationFn: (request) => createPostEntry(request),
     onSuccess: (createdPost) => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
       queryClient.setQueryData(["posts", "detail", createdPost.id], createdPost);
     },
   });
@@ -209,6 +234,7 @@ export function usePatchPost() {
     mutationFn: ({ postId, request }) => updatePostEntry(postId, request),
     onSuccess: (updatedPost) => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
       queryClient.setQueryData(["posts", "detail", updatedPost.id], updatedPost);
     },
   });
@@ -221,6 +247,7 @@ export function usePublishPostBySpec() {
     mutationFn: (request) => createPostBySpec(request),
     onSuccess: (createdPost) => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
       queryClient.setQueryData(["posts", "detail", createdPost.id], createdPost);
     },
   });
@@ -237,6 +264,7 @@ export function usePatchPostBySpec() {
     mutationFn: ({ postId, request }) => updatePostBySpec(postId, request),
     onSuccess: (updatedPost) => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
       queryClient.setQueryData(["posts", "detail", updatedPost.id], updatedPost);
     },
   });
@@ -249,6 +277,7 @@ export function useDeletePost() {
     mutationFn: (postId) => deletePostEntry(postId),
     onSuccess: (_data, postId) => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["series"] });
       queryClient.removeQueries({ queryKey: ["posts", "detail", postId] });
       queryClient.removeQueries({ queryKey: ["posts", "related", postId] });
     },

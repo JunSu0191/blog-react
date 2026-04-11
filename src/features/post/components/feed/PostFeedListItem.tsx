@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/carousel";
 import { resolveDisplayName } from "@/shared/lib/displayName";
 import { TagChip } from "@/shared/ui";
+import { resolveSeriesPath } from "../../utils/postContent";
 
 export type FeedPostCardData = {
   id: number;
@@ -33,6 +34,13 @@ export type FeedPostCardData = {
     nickname?: string;
     profileImageUrl?: string;
   } | null;
+  series?: {
+    id?: number;
+    title: string;
+    order?: number;
+    postCount?: number;
+    slug?: string;
+  } | null;
   readTimeMinutes?: number;
   viewCount?: number;
   likeCount?: number;
@@ -45,6 +53,9 @@ type PostFeedListItemProps = {
   destination: string;
   showEngagementStats?: boolean;
   className?: string;
+  seriesContext?: {
+    order: number;
+  };
 };
 
 function formatPostDate(value?: string) {
@@ -239,6 +250,7 @@ export default function PostFeedListItem({
   destination,
   showEngagementStats = true,
   className,
+  seriesContext,
 }: PostFeedListItemProps) {
   const postImages = resolvePostImages(post);
   const hasImages = postImages.length > 0;
@@ -272,6 +284,17 @@ export default function PostFeedListItem({
         ].join(" ")}
       >
         <div className="min-w-0 space-y-3">
+          {seriesContext ? (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-2 font-black text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
+                {seriesContext.order}
+              </span>
+              <span className="font-semibold text-slate-500 dark:text-slate-400">
+                시리즈 순서
+              </span>
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2.5">
               <Avatar className="h-9 w-9 border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
@@ -313,6 +336,28 @@ export default function PostFeedListItem({
             <span>·</span>
             <span>{formatPostDate(publishedDate)}</span>
           </div>
+
+          {post.series?.title ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {typeof post.series.id === "number" ? (
+                <Link
+                  to={resolveSeriesPath(post.series.id)}
+                  className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/35 dark:text-blue-300 dark:hover:bg-blue-950/50"
+                >
+                  {post.series.title}
+                </Link>
+              ) : (
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-semibold text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/35 dark:text-blue-300">
+                  {post.series.title}
+                </span>
+              )}
+              {typeof post.series.order === "number" ? (
+                <span className="text-slate-500 dark:text-slate-400">
+                  {post.series.order}편
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           <h2 className="text-xl font-bold leading-tight tracking-tight text-slate-900 transition-colors group-hover/post:text-blue-700 dark:text-slate-100 dark:group-hover/post:text-blue-300 sm:text-2xl">
             <Link

@@ -30,6 +30,17 @@ export type PostAuthor = {
   profileImageUrl?: string;
 };
 
+export type PostSeries = {
+  id?: number;
+  title: string;
+  slug?: string;
+  description?: string;
+  coverImageUrl?: string;
+  order?: number;
+  postCount?: number;
+  authorId?: number;
+};
+
 export type PostTocItem = {
   id: string;
   text: string;
@@ -46,6 +57,7 @@ export type PostSummary = {
   category?: PostCategory | null;
   tags: PostTag[];
   author?: PostAuthor | null;
+  series?: PostSeries | null;
   readTimeMinutes: number;
   viewCount: number;
   likeCount: number;
@@ -81,12 +93,31 @@ export type DraftDetail = {
   title: string;
   subtitle?: string;
   category?: string;
+  seriesId?: number;
+  seriesTitle?: string;
+  seriesOrder?: number;
   tags: string[];
   thumbnailUrl?: string;
   contentHtml: string;
   contentJson?: JsonValue;
   autosavedAt?: string;
   updatedAt: string;
+};
+
+export type SeriesSummary = {
+  id: number;
+  title: string;
+  slug?: string;
+  description?: string;
+  coverImageUrl?: string;
+  postCount: number;
+  authorId?: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type SeriesDetail = SeriesSummary & {
+  posts: PostSummary[];
 };
 
 export type PostListQuery = {
@@ -123,10 +154,13 @@ export type PostWriteRequest = {
   subtitle?: string;
   categoryId?: number;
   category?: string;
+  seriesId?: number;
+  seriesTitle?: string;
+  seriesOrder?: number;
   tagIds?: number[];
   tags?: string[];
   thumbnailUrl?: string;
-  contentJson: JsonValue;
+  contentJson?: JsonValue;
   contentHtml?: string;
   publishNow?: boolean;
   draftId?: number;
@@ -137,10 +171,13 @@ export type DraftWriteRequest = {
   subtitle?: string;
   categoryId?: number;
   category?: string;
+  seriesId?: number;
+  seriesTitle?: string;
+  seriesOrder?: number;
   tagIds?: number[];
   tags?: string[];
   thumbnailUrl?: string;
-  contentJson: JsonValue;
+  contentJson?: JsonValue;
   contentHtml?: string;
   publishNow?: boolean;
 };
@@ -149,6 +186,9 @@ export type PostPublishRequest = {
   title: string;
   subtitle?: string;
   category?: string;
+  seriesId?: number;
+  seriesTitle?: string;
+  seriesOrder?: number;
   tags: string[];
   thumbnailUrl?: string;
   contentJson?: JsonValue;
@@ -163,6 +203,9 @@ export type PostDraftRequest = {
   title: string;
   subtitle?: string;
   category?: string;
+  seriesId?: number;
+  seriesTitle?: string;
+  seriesOrder?: number;
   tags: string[];
   thumbnailUrl?: string;
   contentJson?: JsonValue;

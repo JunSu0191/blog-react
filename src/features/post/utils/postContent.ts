@@ -5,6 +5,8 @@ const SCRIPT_LIKE_TAG_PATTERN =
 const SELF_CLOSING_DANGEROUS_PATTERN = /<(script|style|iframe|object|embed|meta|link)[^>]*\/?\s*>/gi;
 const INLINE_EVENT_PATTERN = /\son[a-z]+\s*=\s*("[^"]*"|'[^']*')/gi;
 const JS_PROTOCOL_PATTERN = /\s(href|src)\s*=\s*("|')\s*javascript:[^"']*("|')/gi;
+const CUSTOM_EDITOR_BLOCK_PATTERN =
+  /data-type=["'](?:callout|editorial-image|two-column-images|compose-table|link-card)["']/i;
 
 type DomPurifyLike = {
   sanitize: (html: string) => string;
@@ -39,6 +41,11 @@ export function sanitizeHtml(rawHtml: string) {
     .replace(SELF_CLOSING_DANGEROUS_PATTERN, "")
     .replace(INLINE_EVENT_PATTERN, "")
     .replace(JS_PROTOCOL_PATTERN, ' $1="#"');
+}
+
+export function hasCustomEditorBlocks(rawHtml: string) {
+  if (!rawHtml.trim()) return false;
+  return CUSTOM_EDITOR_BLOCK_PATTERN.test(rawHtml);
 }
 
 function slugifyHeading(text: string) {
@@ -151,6 +158,13 @@ export function stringifyTags(tags: string[]) {
 export function resolvePostPath(postId?: number) {
   if (typeof postId === "number" && Number.isFinite(postId) && postId > 0) {
     return `/posts/${postId}`;
+  }
+  return "/posts";
+}
+
+export function resolveSeriesPath(seriesId?: number) {
+  if (typeof seriesId === "number" && Number.isFinite(seriesId) && seriesId > 0) {
+    return `/series/${seriesId}`;
   }
   return "/posts";
 }

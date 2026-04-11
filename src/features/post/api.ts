@@ -12,10 +12,13 @@ import type {
   PostListItem,
   PostListQuery,
   PostPublishRequest,
+  PostSeries,
   PostSummary,
   PostTag,
   PostUpdateRequest,
   PostWriteRequest,
+  SeriesDetail,
+  SeriesSummary,
   UploadImageResponse,
 } from "./types/api";
 import { uploadImageWithTus, type TusUploadOptions } from "./tusUpload";
@@ -42,6 +45,7 @@ const DRAFTS_ENDPOINT = `${API_ROOT}/posts/drafts`;
 const MYPAGE_POSTS_ENDPOINT = `${API_ROOT}/mypage/posts`;
 const RELATED_ENDPOINT_SUFFIX = "related";
 const CATEGORIES_ENDPOINTS = [`${API_ROOT}/categories`] as const;
+const SERIES_ENDPOINTS = [`${API_ROOT}/v1/series`, `${API_ROOT}/series`] as const;
 
 export type PostLikeStatus = {
   liked: boolean;
@@ -269,6 +273,12 @@ function toPostWritePayload(request: PostPublishRequest): PostWriteRequest {
   const source = request as unknown as Record<string, unknown>;
   const categoryId =
     toMaybeNumber(source.categoryId) ?? toMaybeNumber(request.category);
+  const seriesId =
+    toMaybeNumber(source.seriesId) ?? toMaybeNumber(toRecord(source.series)?.id);
+  const seriesOrder =
+    toMaybeNumber(source.seriesOrder) ?? toMaybeNumber(source.order);
+  const seriesTitle =
+    toText(source.seriesTitle) ?? toText(toRecord(source.series)?.title);
   const fromSpec = toNumberArray(source.tagIds);
   const fromLegacy = toTagIdArrayFromLegacyTags(request.tags);
   const tagIds = [...new Set([...fromSpec, ...fromLegacy])];
@@ -281,10 +291,13 @@ function toPostWritePayload(request: PostPublishRequest): PostWriteRequest {
     subtitle: request.subtitle,
     categoryId,
     category: request.category,
+    seriesId,
+    seriesTitle: seriesId ? undefined : seriesTitle,
+    seriesOrder,
     tagIds: tagIds.length > 0 ? tagIds : undefined,
     tags: tags.length > 0 ? tags : undefined,
     thumbnailUrl: request.thumbnailUrl,
-    contentJson: (request.contentJson ?? {}) as JsonValue,
+    contentJson: request.contentJson,
     contentHtml: request.contentHtml,
     publishNow: request.publishNow,
     draftId: toMaybeNumber(source.draftId) ?? request.draftId,
@@ -295,6 +308,12 @@ function toDraftWritePayload(request: PostDraftRequest): DraftWriteRequest {
   const source = request as unknown as Record<string, unknown>;
   const categoryId =
     toMaybeNumber(source.categoryId) ?? toMaybeNumber(request.category);
+  const seriesId =
+    toMaybeNumber(source.seriesId) ?? toMaybeNumber(toRecord(source.series)?.id);
+  const seriesOrder =
+    toMaybeNumber(source.seriesOrder) ?? toMaybeNumber(source.order);
+  const seriesTitle =
+    toText(source.seriesTitle) ?? toText(toRecord(source.series)?.title);
   const fromSpec = toNumberArray(source.tagIds);
   const fromLegacy = toTagIdArrayFromLegacyTags(request.tags);
   const tagIds = [...new Set([...fromSpec, ...fromLegacy])];
@@ -305,10 +324,13 @@ function toDraftWritePayload(request: PostDraftRequest): DraftWriteRequest {
     subtitle: request.subtitle,
     categoryId,
     category: request.category,
+    seriesId,
+    seriesTitle: seriesId ? undefined : seriesTitle,
+    seriesOrder,
     tagIds: tagIds.length > 0 ? tagIds : undefined,
     tags: tags.length > 0 ? tags : undefined,
     thumbnailUrl: request.thumbnailUrl,
-    contentJson: (request.contentJson ?? {}) as JsonValue,
+    contentJson: request.contentJson,
     contentHtml: request.contentHtml,
   };
 }
@@ -436,6 +458,77 @@ function normalizeAdjacentPost(value: unknown): AdjacentPost | null {
   };
 }
 
+function normalizeSeriesRef(
+  value: unknown,
+  fallbackRecord?: Record<string, unknown>,
+): PostSeries | null {
+  const nested =
+    toRecord(value) ??
+    toRecord(fallbackRecord?.series) ??
+    toRecord(fallbackRecord?.seriesInfo) ??
+    toRecord(fallbackRecord?.seriesItem) ??
+    toRecord(fallbackRecord?.seriesMembership);
+  const source = nested ?? fallbackRecord;
+
+  if (!source) return null;
+
+  const id =
+    toPositiveNumber(source.id) ??
+    toPositiveNumber(source.seriesId) ??
+    toPositiveNumber(fallbackRecord?.seriesId);
+  const title =
+    toText(source.title) ??
+    toText(source.name) ??
+    toText(source.seriesTitle) ??
+    toText(fallbackRecord?.seriesTitle) ??
+    toText(source.slug);
+
+  if (!title) return null;
+
+  return {
+    id,
+    title,
+    slug: toText(source.slug),
+    description: toText(source.description),
+    coverImageUrl:
+      toText(source.coverImageUrl) ??
+      toText(source.coverUrl) ??
+      toText(source.thumbnailUrl),
+    order:
+      toPositiveNumber(source.order) ??
+      toPositiveNumber(source.seriesOrder) ??
+      toPositiveNumber(source.postOrder) ??
+      toPositiveNumber(fallbackRecord?.seriesOrder),
+    postCount:
+      toPositiveNumber(source.postCount) ??
+      toPositiveNumber(source.count) ??
+      toPositiveNumber(source.totalPosts),
+    authorId:
+      toPositiveNumber(source.authorId) ?? toPositiveNumber(source.userId),
+  };
+}
+
+function normalizeSeriesSummary(raw: unknown): SeriesSummary | null {
+  const source = unwrapApiData(raw);
+  const record = toRecord(source) || {};
+  const series = normalizeSeriesRef(source, record);
+  const id = series?.id;
+
+  if (typeof id !== "number" || !series) return null;
+
+  return {
+    id,
+    title: series.title,
+    slug: series.slug,
+    description: series.description,
+    coverImageUrl: series.coverImageUrl,
+    postCount: series.postCount ?? 0,
+    authorId: series.authorId,
+    createdAt: toText(record.createdAt),
+    updatedAt: toText(record.updatedAt),
+  };
+}
+
 function normalizeSummary(raw: unknown): PostSummary {
   const source = unwrapApiData(raw);
   const record = toRecord(source) || {};
@@ -474,6 +567,7 @@ function normalizeSummary(raw: unknown): PostSummary {
     toMaybeNumber(authorRecord?.id) ??
     toMaybeNumber(record.authorId) ??
     toMaybeNumber(record.userId);
+  const series = normalizeSeriesRef(record.series, record);
   const thumbnailUrl =
     toText(record.thumbnailUrl) ??
     toText(record.thumbnail) ??
@@ -526,6 +620,7 @@ function normalizeSummary(raw: unknown): PostSummary {
             profileImageUrl: toText(authorRecord?.profileImageUrl),
           }
         : null,
+    series,
     readTimeMinutes,
     viewCount: toNumber(record.viewCount),
     likeCount: toNumber(record.likeCount),
@@ -594,8 +689,7 @@ function normalizeDetail(raw: unknown): PostDetail {
     (record.json as JsonValue | undefined) ??
     (record.doc as JsonValue | undefined) ??
     (record.data as JsonValue | undefined) ??
-    contentAsJson ??
-    ({} as JsonValue);
+    contentAsJson;
 
   return {
     ...summary,
@@ -690,6 +784,55 @@ function normalizePagedResponse(
   };
 }
 
+function normalizeSeriesList(raw: unknown): SeriesSummary[] {
+  const source = unwrapApiData(raw);
+  const record = toRecord(source);
+  const list = Array.isArray(record?.content)
+    ? record.content
+    : Array.isArray(record?.items)
+      ? record.items
+      : Array.isArray(record?.series)
+        ? record.series
+        : Array.isArray(source)
+          ? source
+          : [];
+
+  return list.reduce<SeriesSummary[]>((accumulator, item) => {
+    const normalized = normalizeSeriesSummary(item);
+    if (!normalized) return accumulator;
+    accumulator.push(normalized);
+    return accumulator;
+  }, []);
+}
+
+function normalizeSeriesDetail(raw: unknown): SeriesDetail {
+  const source = unwrapApiData(raw);
+  const record = toRecord(source) || {};
+  const summary = normalizeSeriesSummary(record);
+
+  if (!summary) {
+    throw new Error("시리즈 응답 형식이 올바르지 않습니다.");
+  }
+
+  const nestedPostsRecord =
+    toRecord(record.posts) ?? toRecord(record.postPage) ?? undefined;
+  const postsRaw: unknown[] =
+    Array.isArray(record.posts)
+      ? record.posts
+      : Array.isArray(record.content)
+        ? record.content
+        : Array.isArray(record.items)
+          ? record.items
+          : Array.isArray(nestedPostsRecord?.content)
+            ? nestedPostsRecord.content
+            : [];
+
+  return {
+    ...summary,
+    posts: postsRaw.map((item: unknown) => normalizeSummary(item)),
+  };
+}
+
 function normalizeDraftDetail(raw: unknown, fallbackId?: number): DraftDetail {
   const record = toRecord(raw);
   if (!record) {
@@ -708,10 +851,22 @@ function normalizeDraftDetail(raw: unknown, fallbackId?: number): DraftDetail {
       (typeof toMaybeNumber(record.categoryId) === "number"
         ? String(toMaybeNumber(record.categoryId))
         : undefined),
+    seriesId:
+      toPositiveNumber(record.seriesId) ??
+      toPositiveNumber(toRecord(record.series)?.id),
+    seriesTitle:
+      toText(record.seriesTitle) ??
+      toText(toRecord(record.series)?.title),
+    seriesOrder:
+      toPositiveNumber(record.seriesOrder) ??
+      toPositiveNumber(toRecord(record.series)?.order),
     tags: tagTexts.length > 0 ? tagTexts : tagIds.map((id) => String(id)),
     thumbnailUrl: toText(record.thumbnailUrl),
     contentHtml: toText(record.contentHtml) || "",
-    contentJson: (record.contentJson ?? {}) as JsonValue,
+    contentJson: (record.contentJson as JsonValue | undefined) ??
+      (record.json as JsonValue | undefined) ??
+      (record.doc as JsonValue | undefined) ??
+      (record.data as JsonValue | undefined),
     autosavedAt: toText(record.autosavedAt),
     updatedAt: toText(record.updatedAt) || new Date().toISOString(),
   };
@@ -757,6 +912,64 @@ export async function fetchPostCategories(): Promise<PostCategoryOption[]> {
   }
 
   return [];
+}
+
+export async function fetchSeriesList(): Promise<SeriesSummary[]> {
+  for (const endpoint of SERIES_ENDPOINTS) {
+    try {
+      const response = await api<unknown>(endpoint, {
+        suppressForbiddenRedirect: true,
+      });
+      return normalizeSeriesList(response);
+    } catch (error) {
+      const status = getErrorStatus(error);
+      if (status === 404) continue;
+      throw error;
+    }
+  }
+
+  return [];
+}
+
+export async function fetchSeriesById(seriesId: number): Promise<SeriesDetail> {
+  let lastNotFoundError: unknown = null;
+
+  for (const endpoint of SERIES_ENDPOINTS) {
+    try {
+      const response = await api<unknown>(`${endpoint}/${seriesId}`);
+      const normalized = normalizeSeriesDetail(response);
+      if (normalized.posts.length > 0) {
+        return normalized;
+      }
+
+      try {
+        const postsResponse = await api<unknown>(`${endpoint}/${seriesId}/posts`);
+        return {
+          ...normalized,
+          posts: normalizePagedResponse(postsResponse, 0, 50).content,
+        };
+      } catch (postsError) {
+        const postsStatus = getErrorStatus(postsError);
+        if (postsStatus === 404) {
+          return normalized;
+        }
+        throw postsError;
+      }
+    } catch (error) {
+      const status = getErrorStatus(error);
+      if (status === 404) {
+        lastNotFoundError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastNotFoundError) {
+    throw lastNotFoundError;
+  }
+
+  throw new Error("시리즈를 찾을 수 없습니다.");
 }
 
 export async function fetchPosts(

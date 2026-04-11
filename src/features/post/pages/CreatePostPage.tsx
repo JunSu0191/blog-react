@@ -11,8 +11,10 @@ import {
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuthContext } from "@/shared/context/useAuthContext";
 import { ActionDialog, Button, Input, Select } from "@/shared/ui";
 import { useToast } from "@/shared/ui/ToastProvider";
+import { resolvePostContentHtml } from "../components/editor/postEditorContent";
 import HashtagInput from "../components/HashtagInput";
 import { getPostDraft, uploadPostImage } from "../api";
 import {
@@ -23,12 +25,16 @@ import {
   usePostDrafts,
   usePublishPost,
   useSavePostDraft,
+  useSeriesList,
 } from "../queries";
 import { ComposeMode } from "../types/enums";
 import type { ComposeMode as ComposeModeType } from "../types/enums";
 import type { PostComposerFormValues } from "../types/form";
 import {
   parseTagText,
+  estimateReadTimeMinutes,
+  extractTocFromHtml,
+  hasCustomEditorBlocks,
   resolvePostPath,
   sanitizeHtml,
   stripHtml,
@@ -46,6 +52,9 @@ const INITIAL_FORM_VALUES: PostComposerFormValues = {
   title: "",
   subtitle: "",
   category: "",
+  seriesId: "",
+  seriesTitle: "",
+  seriesOrder: "",
   tagsText: "",
   thumbnailUrl: "",
   contentHtml: "",
@@ -151,6 +160,18 @@ function getErrorStatus(error: unknown) {
   return undefined;
 }
 
+function toPositiveInteger(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
 function EditorLoader() {
   return (
     <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/60">
@@ -166,6 +187,7 @@ export default function CreatePostPage() {
   const params = useParams<{ postId?: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { user } = useAuthContext();
   const { success, error: showError } = useToast();
   const rawPostId = Number(params.postId);
   const editingPostId =
@@ -194,8 +216,12 @@ export default function CreatePostPage() {
   const editInitialFingerprintRef = useRef<string>("");
   const autosaveTimerRef = useRef<number | null>(null);
   const initializedEditPostIdRef = useRef<number | null>(null);
+  const hasShownMissingJsonWarningRef = useRef(false);
 
   const categoriesQuery = usePostCategories();
+  const seriesQuery = useSeriesList({
+    enabled: Boolean(user),
+  });
   const editTargetQuery = usePostDetail(editingPostId ?? 0, {
     enabled: isEditMode,
   });
@@ -206,26 +232,52 @@ export default function CreatePostPage() {
   const patchMutation = usePatchPost();
 
   const draftItems = draftsQuery.data || [];
+  const resolvedContentHtml = useMemo(
+    () =>
+      resolvePostContentHtml({
+        contentHtml: formValues.contentHtml,
+        contentJson: formValues.contentJson,
+        preferJson: true,
+      }),
+    [formValues.contentHtml, formValues.contentJson],
+  );
   const parsedTags = useMemo(
     () => parseTagText(formValues.tagsText),
     [formValues.tagsText],
   );
   const plainText = useMemo(
-    () => stripHtml(formValues.contentHtml),
-    [formValues.contentHtml],
+    () => stripHtml(resolvedContentHtml),
+    [resolvedContentHtml],
   );
+  const previewExcerpt = useMemo(() => {
+    const summarySource = normalizeDisplayText(formValues.subtitle) || plainText;
+    if (!summarySource) {
+      return "요약 문구나 본문 첫 문단이 카드 미리보기에 반영됩니다.";
+    }
+    return summarySource.length > 132
+      ? `${summarySource.slice(0, 132).trim()}...`
+      : summarySource;
+  }, [formValues.subtitle, plainText]);
   const hasBodyContent = useMemo(
-    () => plainText.trim().length > 0 || hasMeaningfulHtml(formValues.contentHtml),
-    [formValues.contentHtml, plainText],
+    () => plainText.trim().length > 0 || hasMeaningfulHtml(resolvedContentHtml),
+    [plainText, resolvedContentHtml],
   );
   const safePreviewHtml = useMemo(
-    () => sanitizeHtml(formValues.contentHtml),
-    [formValues.contentHtml],
+    () => sanitizeHtml(resolvedContentHtml),
+    [resolvedContentHtml],
+  );
+  const estimatedReadMinutes = useMemo(
+    () => estimateReadTimeMinutes(resolvedContentHtml),
+    [resolvedContentHtml],
+  );
+  const tocItems = useMemo(
+    () => extractTocFromHtml(resolvedContentHtml),
+    [resolvedContentHtml],
   );
 
   const firstImageThumbnailUrl = useMemo(
-    () => extractFirstImageUrlFromHtml(formValues.contentHtml),
-    [formValues.contentHtml],
+    () => extractFirstImageUrlFromHtml(resolvedContentHtml),
+    [resolvedContentHtml],
   );
 
   const effectiveThumbnailUrl = useMemo(() => {
@@ -241,18 +293,24 @@ export default function CreatePostPage() {
         title: normalizeDisplayText(formValues.title),
         subtitle: normalizeDisplayText(formValues.subtitle),
         category: normalizeDisplayText(formValues.category),
+        seriesId: normalizeDisplayText(formValues.seriesId),
+        seriesTitle: normalizeDisplayText(formValues.seriesTitle),
+        seriesOrder: normalizeDisplayText(formValues.seriesOrder),
         tags: parsedTags,
         thumbnailMode,
         thumbnailUrl: formValues.thumbnailUrl.trim(),
-        contentHtml: formValues.contentHtml.trim(),
+        contentHtml: resolvedContentHtml.trim(),
       }),
     [
       formValues.category,
-      formValues.contentHtml,
+      formValues.seriesId,
+      formValues.seriesOrder,
+      formValues.seriesTitle,
       formValues.subtitle,
       formValues.thumbnailUrl,
       formValues.title,
       parsedTags,
+      resolvedContentHtml,
       thumbnailMode,
     ],
   );
@@ -266,10 +324,53 @@ export default function CreatePostPage() {
     ],
     [categoriesQuery.data],
   );
+  const availableSeriesItems = useMemo(() => {
+    const rawItems = seriesQuery.data || [];
+    if (rawItems.length === 0) return rawItems;
+    if (typeof user?.id !== "number") return rawItems;
+
+    const ownSeries = rawItems.filter(
+      (series) => typeof series.authorId !== "number" || series.authorId === user.id,
+    );
+
+    return ownSeries.length > 0 ? ownSeries : rawItems;
+  }, [seriesQuery.data, user?.id]);
+  const seriesOptions = useMemo(
+    () => [
+      { value: "", label: "시리즈 선택 안 함" },
+      ...availableSeriesItems.map((series) => ({
+        value: String(series.id),
+        label:
+          series.postCount > 0
+            ? `${series.title} (${series.postCount}편)`
+            : series.title,
+      })),
+    ],
+    [availableSeriesItems],
+  );
 
   const normalizedTitle = normalizeDisplayText(formValues.title);
   const normalizedSubtitle = normalizeDisplayText(formValues.subtitle);
   const normalizedCategory = normalizeDisplayText(formValues.category);
+  const normalizedSeriesId = normalizeDisplayText(formValues.seriesId);
+  const normalizedSeriesTitle = normalizeDisplayText(formValues.seriesTitle);
+  const normalizedSeriesOrder = normalizeDisplayText(formValues.seriesOrder);
+  const selectedSeriesOption = normalizedSeriesId
+    ? seriesOptions.find((option) => option.value === normalizedSeriesId)
+    : undefined;
+  const resolvedCategoryLabel = formValues.category
+    ? categoryOptions.find((option) => option.value === formValues.category)
+        ?.label || "미분류"
+    : "미분류";
+  const resolvedSeriesLabel = selectedSeriesOption?.label
+    ? normalizedSeriesOrder
+      ? `${selectedSeriesOption.label} · ${normalizedSeriesOrder}편`
+      : selectedSeriesOption.label
+    : normalizedSeriesTitle
+    ? normalizedSeriesOrder
+      ? `${normalizedSeriesTitle} · ${normalizedSeriesOrder}편`
+      : normalizedSeriesTitle
+    : "";
 
   const canPublish =
     normalizedTitle.length > 0 &&
@@ -312,6 +413,52 @@ export default function CreatePostPage() {
       parsedTags.length,
     ],
   );
+  const completedChecklistCount = useMemo(
+    () => publishChecklist.filter((item) => item.done).length,
+    [publishChecklist],
+  );
+  const composerStatusLabel = useMemo(() => {
+    if (completedChecklistCount === publishChecklist.length) {
+      return "발행 준비 완료";
+    }
+    if (normalizedTitle.length > 0 || hasBodyContent) {
+      return "작성 중";
+    }
+    return "초안 시작 전";
+  }, [
+    completedChecklistCount,
+    hasBodyContent,
+    normalizedTitle.length,
+    publishChecklist.length,
+  ]);
+  const compositionSuggestions = useMemo(() => {
+    const suggestions: string[] = [];
+
+    if (normalizedTitle.length > 0 && normalizedTitle.length < 12) {
+      suggestions.push("제목이 짧습니다. 검색/탐색 카드에서 더 눈에 띄게 다듬어 보세요.");
+    }
+    if (hasBodyContent && plainText.length > 1000 && tocItems.length < 2) {
+      suggestions.push("본문이 길어졌습니다. 제목 2/3을 추가해 읽기 흐름을 나누는 편이 좋습니다.");
+    }
+    if (hasBodyContent && parsedTags.length === 0) {
+      suggestions.push("태그가 없으면 탐색 노출이 약해집니다. 핵심 키워드를 1개 이상 붙이는 편이 좋습니다.");
+    }
+    if (hasBodyContent && !effectiveThumbnailUrl.trim()) {
+      suggestions.push("대표 이미지가 없으면 카드 미리보기가 약합니다. 본문 첫 이미지나 직접 업로드를 준비해 주세요.");
+    }
+    if (plainText.length > 0 && plainText.length < 280) {
+      suggestions.push("본문이 짧습니다. 문제 제기나 요약 한 단락을 더 넣으면 블로그 글 느낌이 더 강해집니다.");
+    }
+
+    return suggestions.slice(0, 4);
+  }, [
+    effectiveThumbnailUrl,
+    hasBodyContent,
+    parsedTags.length,
+    plainText.length,
+    normalizedTitle.length,
+    tocItems.length,
+  ]);
 
   const saveDraft = useCallback(
     async (silent: boolean) => {
@@ -324,9 +471,15 @@ export default function CreatePostPage() {
             title: normalizedTitle,
             subtitle: normalizedSubtitle || undefined,
             category: normalizedCategory || undefined,
+            seriesId: toPositiveInteger(normalizedSeriesId),
+            seriesTitle:
+              normalizedSeriesId.length === 0
+                ? normalizedSeriesTitle || undefined
+                : undefined,
+            seriesOrder: toPositiveInteger(normalizedSeriesOrder),
             tags: parsedTags,
             thumbnailUrl: effectiveThumbnailUrl || undefined,
-            contentHtml: formValues.contentHtml,
+            contentHtml: resolvedContentHtml,
             contentJson: formValues.contentJson,
           },
         });
@@ -348,12 +501,16 @@ export default function CreatePostPage() {
       canSaveDraft,
       effectiveThumbnailUrl,
       fingerprint,
-      formValues.category,
       formValues.contentHtml,
       formValues.contentJson,
-      formValues.subtitle,
-      formValues.title,
+      normalizedCategory,
+      normalizedSeriesId,
+      normalizedSeriesOrder,
+      normalizedSeriesTitle,
+      normalizedSubtitle,
+      normalizedTitle,
       parsedTags,
+      resolvedContentHtml,
       saveDraftMutation,
       showError,
       success,
@@ -444,9 +601,15 @@ export default function CreatePostPage() {
         title: normalizedPublishTitle,
         subtitle: normalizedSubtitle || undefined,
         category: normalizedCategory || undefined,
+        seriesId: toPositiveInteger(normalizedSeriesId),
+        seriesTitle:
+          normalizedSeriesId.length === 0
+            ? normalizedSeriesTitle || undefined
+            : undefined,
+        seriesOrder: toPositiveInteger(normalizedSeriesOrder),
         tags: parsedTags,
         thumbnailUrl: effectiveThumbnailUrl || undefined,
-        contentHtml: formValues.contentHtml,
+        contentHtml: resolvedContentHtml,
         contentJson: formValues.contentJson,
         publishNow: true,
         draftId: activeDraftId,
@@ -496,15 +659,27 @@ export default function CreatePostPage() {
         ? String(target.category.id)
         : (target.category?.name ?? ""),
     );
+    const resolvedSeriesId =
+      typeof target.series?.id === "number" ? String(target.series.id) : "";
+    const resolvedSeriesTitle = normalizeDisplayText(target.series?.title);
+    const resolvedSeriesOrder =
+      typeof target.series?.order === "number" ? String(target.series.order) : "";
     const tags = target.tags.map((tag) => tag.name).filter((name) => name.trim().length > 0);
     const incomingFingerprint = JSON.stringify({
-        title: normalizeDisplayText(target.title),
-        subtitle: normalizeDisplayText(target.subtitle),
-        category: resolvedCategory,
+      title: normalizeDisplayText(target.title),
+      subtitle: normalizeDisplayText(target.subtitle),
+      category: resolvedCategory,
+      seriesId: resolvedSeriesId,
+      seriesTitle: resolvedSeriesTitle,
+      seriesOrder: resolvedSeriesOrder,
       tags,
       thumbnailMode: resolvedThumbnailMode,
       thumbnailUrl: target.thumbnailUrl || "",
-      contentHtml: target.contentHtml || "",
+      contentHtml: resolvePostContentHtml({
+        contentHtml: target.contentHtml || "",
+        contentJson: target.contentJson,
+        preferJson: true,
+      }),
     });
     const isSamePost = initializedEditPostIdRef.current === editingPostId;
     const hasLocalEdits =
@@ -514,10 +689,14 @@ export default function CreatePostPage() {
 
     if (hasLocalEdits || alreadyHydratedWithIncoming) return;
 
+    hasShownMissingJsonWarningRef.current = false;
     setFormValues({
       title: normalizeDisplayText(target.title),
       subtitle: normalizeDisplayText(target.subtitle),
       category: resolvedCategory,
+      seriesId: resolvedSeriesId,
+      seriesTitle: resolvedSeriesTitle,
+      seriesOrder: resolvedSeriesOrder,
       tagsText: stringifyTags(tags),
       thumbnailUrl: target.thumbnailUrl || "",
       contentHtml: target.contentHtml || "",
@@ -538,6 +717,20 @@ export default function CreatePostPage() {
     isEditMode,
   ]);
 
+  useEffect(() => {
+    if (hasShownMissingJsonWarningRef.current) return;
+
+    const loadedHtml = formValues.contentHtml;
+    if (!loadedHtml.trim()) return;
+    if (formValues.contentJson) return;
+    if (!hasCustomEditorBlocks(loadedHtml)) return;
+
+    hasShownMissingJsonWarningRef.current = true;
+    showError(
+      "서버가 편집 블록 데이터를 완전히 돌려주지 않았습니다. 표, 콜아웃, 링크 카드 같은 블록은 백엔드에서 contentJson을 그대로 저장/반환해야 안전합니다.",
+    );
+  }, [formValues.contentHtml, formValues.contentJson, showError]);
+
   const loadDraft = async (draftId: number) => {
     setIsLoadingDraft(true);
 
@@ -548,10 +741,18 @@ export default function CreatePostPage() {
         ? ThumbnailMode.MANUAL_UPLOAD
         : ThumbnailMode.AUTO_FROM_CONTENT;
 
+      hasShownMissingJsonWarningRef.current = false;
       setFormValues({
         title: normalizeDisplayText(draft.title),
         subtitle: normalizeDisplayText(draft.subtitle),
         category: normalizeDisplayText(draft.category),
+        seriesId:
+          typeof draft.seriesId === "number" ? String(draft.seriesId) : "",
+        seriesTitle: normalizeDisplayText(draft.seriesTitle),
+        seriesOrder:
+          typeof draft.seriesOrder === "number"
+            ? String(draft.seriesOrder)
+            : "",
         tagsText: stringifyTags(draft.tags),
         thumbnailUrl: draft.thumbnailUrl || "",
         contentHtml: draft.contentHtml,
@@ -566,10 +767,21 @@ export default function CreatePostPage() {
         title: normalizeDisplayText(draft.title),
         subtitle: normalizeDisplayText(draft.subtitle),
         category: normalizeDisplayText(draft.category),
+        seriesId:
+          typeof draft.seriesId === "number" ? String(draft.seriesId) : "",
+        seriesTitle: normalizeDisplayText(draft.seriesTitle),
+        seriesOrder:
+          typeof draft.seriesOrder === "number"
+            ? String(draft.seriesOrder)
+            : "",
         tags: draft.tags,
         thumbnailMode: resolvedThumbnailMode,
         thumbnailUrl: draft.thumbnailUrl || "",
-        contentHtml: draft.contentHtml,
+        contentHtml: resolvePostContentHtml({
+          contentHtml: draft.contentHtml,
+          contentJson: draft.contentJson,
+          preferJson: true,
+        }),
       });
       success("임시저장 글을 불러왔습니다.");
     } catch (error) {
@@ -725,14 +937,14 @@ export default function CreatePostPage() {
   }
 
   const renderComposeModeToggle = (
-    <div className="flex items-center gap-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/90 p-1.5 dark:border-slate-700 dark:bg-slate-800/80">
       <button
         type="button"
         onClick={() => setComposeMode(ComposeMode.WRITE)}
         className={[
-          "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+          "rounded-xl px-3.5 py-2 text-sm font-semibold transition",
           composeMode === ComposeMode.WRITE
-            ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+            ? "bg-white text-slate-950 shadow-[0_14px_28px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-900 dark:text-slate-100"
             : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
         ].join(" ")}
       >
@@ -742,22 +954,41 @@ export default function CreatePostPage() {
         type="button"
         onClick={() => setComposeMode(ComposeMode.PREVIEW)}
         className={[
-          "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+          "rounded-xl px-3.5 py-2 text-sm font-semibold transition",
           composeMode === ComposeMode.PREVIEW
-            ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+            ? "bg-white text-slate-950 shadow-[0_14px_28px_-18px_rgba(15,23,42,0.35)] dark:bg-slate-900 dark:text-slate-100"
             : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
         ].join(" ")}
       >
         미리보기
       </button>
-      <span className="ml-auto pr-2 text-xs text-slate-500 dark:text-slate-400">
-        글자 수 {plainText.length.toLocaleString()}자
-      </span>
+      <div className="ml-auto flex flex-wrap items-center gap-2 pr-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+        <span className="rounded-full bg-white px-2.5 py-1 dark:bg-slate-900">
+          글자 수 {plainText.length.toLocaleString()}자
+        </span>
+        <span className="rounded-full bg-white px-2.5 py-1 dark:bg-slate-900">
+          예상 {estimatedReadMinutes}분
+        </span>
+        <span className="rounded-full bg-white px-2.5 py-1 dark:bg-slate-900">
+          목차 {tocItems.length}개
+        </span>
+      </div>
     </div>
   );
 
   const renderMetaFields = (fullScreen: boolean) => (
     <div className="space-y-4">
+      <div className="space-y-1">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+          Story Setup
+        </p>
+        <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
+          글의 제목, 맥락, 노출 정보를 먼저 정리해 주세요.
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          제목과 부제, 카테고리, 태그, 대표 이미지는 글을 클릭하게 만드는 첫 화면입니다.
+        </p>
+      </div>
       <div
         className={
           fullScreen ? "grid gap-3 sm:grid-cols-2" : "grid gap-4 sm:grid-cols-2"
@@ -807,7 +1038,81 @@ export default function CreatePostPage() {
           onRemove={removeTag}
           hint="#을 생략하고 입력 후 Enter(또는 콤마)로 등록할 수 있습니다."
         />
+        <Select
+          label="기존 시리즈"
+          value={formValues.seriesId}
+          onValueChange={(value) =>
+            setFormValues((prev) => ({
+              ...prev,
+              seriesId: value,
+              seriesTitle: value ? "" : prev.seriesTitle,
+            }))
+          }
+          options={seriesOptions}
+          disabled={seriesQuery.isLoading}
+          hint={
+            seriesQuery.data?.length
+              ? "내 시리즈가 있으면 바로 선택하고, 없으면 아래에 새 이름을 입력하세요."
+              : "아직 연결할 시리즈가 없습니다. 새 시리즈 이름을 입력해도 됩니다."
+          }
+        />
+        <Input
+          label="새 시리즈 이름"
+          value={formValues.seriesTitle}
+          onChange={(event) =>
+            setFormValues((prev) => ({
+              ...prev,
+              seriesId: "",
+              seriesTitle: event.target.value,
+            }))
+          }
+          placeholder="예: 프론트엔드 리디자인 일지"
+          maxLength={100}
+          disabled={Boolean(formValues.seriesId)}
+        />
+        <Input
+          label="시리즈 순서"
+          value={formValues.seriesOrder}
+          onChange={(event) =>
+            setFormValues((prev) => ({
+              ...prev,
+              seriesOrder: event.target.value,
+            }))
+          }
+          placeholder="예: 3"
+          maxLength={10}
+        />
       </div>
+
+      <section className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              시리즈 연결
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              기존 시리즈를 선택하거나 새 시리즈 이름을 입력한 뒤, 몇 편인지 함께 저장할 수 있습니다.
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 rounded-2xl border border-white/80 bg-white/80 px-3 py-3 text-xs text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300">
+          {resolvedSeriesLabel ? (
+            <>
+              <p className="font-semibold text-slate-800 dark:text-slate-100">
+                현재 연결 시리즈
+              </p>
+              <p className="mt-1">{resolvedSeriesLabel}</p>
+            </>
+          ) : (
+            "시리즈를 지정하면 상세 페이지와 피드 카드에서 함께 노출됩니다."
+          )}
+        </div>
+        {seriesQuery.isError ? (
+          <p className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">
+            시리즈 목록을 불러오지 못했습니다. 새 시리즈 이름으로 직접 저장은 계속 시도할 수 있습니다.
+          </p>
+        ) : null}
+      </section>
 
       <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/60">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -901,6 +1206,17 @@ export default function CreatePostPage() {
 
   const renderEditorSection = (fullScreen: boolean) => (
     <div className="space-y-3">
+      <div className="space-y-1">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+          Editorial Canvas
+        </p>
+        <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
+          블로그 글처럼 보이게 쓰고, 블록으로 구조를 만드세요.
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          `/` 명령으로 제목, 체크리스트, 콜아웃, 좌우 2열 이미지를 빠르게 넣을 수 있습니다.
+        </p>
+      </div>
       {renderComposeModeToggle}
       {composeMode === ComposeMode.WRITE ? (
         <Suspense fallback={<EditorLoader />}>
@@ -924,7 +1240,7 @@ export default function CreatePostPage() {
           />
         </Suspense>
       ) : (
-        <article className="toss-editor-content prose prose-slate max-w-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 dark:prose-invert dark:border-slate-700 dark:bg-slate-900/60">
+        <article className="toss-editor-content prose prose-slate max-w-none rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,0.98))] px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:prose-invert dark:border-slate-700 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.96))]">
           {safePreviewHtml.trim().length > 0 ? (
             <div
               dangerouslySetInnerHTML={{
@@ -939,6 +1255,216 @@ export default function CreatePostPage() {
         </article>
       )}
     </div>
+  );
+
+  const renderDocumentOverview = () => (
+    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+          문서 구조
+        </h2>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          {estimatedReadMinutes}분 읽기
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+            글자 수
+          </p>
+          <p className="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">
+            {plainText.length.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+            제목 수
+          </p>
+          <p className="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">
+            {tocItems.length}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+            태그 수
+          </p>
+          <p className="mt-1 text-lg font-black text-slate-900 dark:text-slate-100">
+            {parsedTags.length}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {tocItems.length > 0 ? (
+          tocItems.map((item) => (
+            <div
+              key={`${item.id}-${item.text}`}
+              className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/70"
+            >
+              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+                H{item.level}
+              </span>
+              <span className="line-clamp-1 text-slate-700 dark:text-slate-200">
+                {item.text}
+              </span>
+            </div>
+          ))
+        ) : (
+          <p className="rounded-2xl border border-dashed border-slate-300 px-3 py-4 text-xs text-slate-500 dark:border-slate-600 dark:text-slate-400">
+            아직 제목 구조가 없습니다. 긴 글이라면 제목 2, 제목 3으로 흐름을 나누는 편이 좋습니다.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+
+  const renderWritingGuide = () => (
+    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+        작성 가이드
+      </h2>
+      <ul className="mt-3 space-y-1.5 text-xs leading-5 text-slate-600 dark:text-slate-400">
+        <li>• `/`로 제목, 체크리스트, 콜아웃, 표, 링크 카드, 좌우 2열 이미지를 빠르게 넣을 수 있습니다.</li>
+        <li>• Ctrl+V 또는 드래그앤드롭으로 이미지를 넣으면 2장은 자동으로 반반 배치되고, 이후 드래그로 서로 교체할 수 있습니다.</li>
+        <li>• 대표 이미지는 직접 업로드하거나 본문 첫 이미지를 자동으로 쓸 수 있습니다.</li>
+        <li>• 8초 간격으로 자동 임시저장이 동작합니다.</li>
+      </ul>
+
+      <div className="mt-4 space-y-2">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+          개선 제안
+        </p>
+        {compositionSuggestions.length > 0 ? (
+          compositionSuggestions.map((suggestion) => (
+            <p
+              key={suggestion}
+              className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+            >
+              {suggestion}
+            </p>
+          ))
+        ) : (
+          <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+            현재 구성이 안정적입니다. 미리보기에서 카드 썸네일과 제목 균형만 마지막으로 확인해 보세요.
+          </p>
+        )}
+      </div>
+
+      <Link
+        to="/posts"
+        className="mt-4 inline-flex text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
+      >
+        목록으로 돌아가기
+      </Link>
+    </section>
+  );
+
+  const renderPublishPreviews = () => (
+    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+          발행 미리보기
+        </h2>
+        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+          카드 3종
+        </span>
+      </div>
+
+      <div className="mt-3 space-y-3">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/70">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+            Search Card
+          </p>
+          <div className="mt-2 flex gap-3">
+            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-blue-100 dark:bg-blue-950/40">
+              {effectiveThumbnailUrl ? (
+                <img
+                  src={effectiveThumbnailUrl}
+                  alt="검색 카드 썸네일"
+                  className="h-full w-full object-cover"
+                />
+              ) : null}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-1 text-sm font-bold text-slate-900 dark:text-slate-100">
+                {normalizedTitle || "제목이 비어 있습니다."}
+              </p>
+              <p className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                {previewExcerpt}
+              </p>
+              <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+                {resolvedCategoryLabel} · {estimatedReadMinutes}분 읽기
+                {resolvedSeriesLabel ? ` · ${resolvedSeriesLabel}` : ""}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+          <div className="aspect-[16/9] w-full bg-[linear-gradient(135deg,rgba(37,99,235,0.16),rgba(79,70,229,0.12))] dark:bg-[linear-gradient(135deg,rgba(37,99,235,0.22),rgba(79,70,229,0.18))]">
+            {effectiveThumbnailUrl ? (
+              <img
+                src={effectiveThumbnailUrl}
+                alt="피드 카드 대표 이미지"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm font-semibold text-blue-700 dark:text-blue-300">
+                대표 이미지 영역
+              </div>
+            )}
+          </div>
+          <div className="space-y-2 p-4">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                {resolvedCategoryLabel}
+              </span>
+              {resolvedSeriesLabel ? (
+                <span className="rounded-full bg-slate-100 px-2 py-1 dark:bg-slate-800">
+                  {resolvedSeriesLabel}
+                </span>
+              ) : null}
+            </div>
+            <p className="line-clamp-2 text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
+              {normalizedTitle || "카드에 보일 제목을 입력해 주세요."}
+            </p>
+            <p className="line-clamp-3 text-sm text-slate-500 dark:text-slate-400">
+              {previewExcerpt}
+            </p>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-[28px] border border-blue-200 bg-[linear-gradient(135deg,rgba(37,99,235,0.96),rgba(79,70,229,0.92))] p-5 text-white shadow-[0_26px_60px_-36px_rgba(37,99,235,0.75)] dark:border-blue-500/30">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100/90">
+            OG Preview
+          </p>
+          <div className="mt-5 flex min-h-[180px] flex-col justify-between gap-4">
+            <div>
+              <p className="max-w-[24rem] text-2xl font-black tracking-tight">
+                {normalizedTitle || "소셜 카드 제목을 입력해 주세요."}
+              </p>
+              <p className="mt-3 max-w-[28rem] text-sm text-blue-50/90">
+                {previewExcerpt}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-blue-50/90">
+              <span className="rounded-full bg-white/14 px-2.5 py-1">
+                {resolvedCategoryLabel}
+              </span>
+              <span className="rounded-full bg-white/14 px-2.5 py-1">
+                {estimatedReadMinutes}분 읽기
+              </span>
+              {resolvedSeriesLabel ? (
+                <span className="rounded-full bg-white/14 px-2.5 py-1">
+                  {resolvedSeriesLabel}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 
   const renderDraftList = (maxItems?: number) => {
@@ -1070,7 +1596,12 @@ export default function CreatePostPage() {
                     </div>
                   </section>
 
-                  <aside className="space-y-3">{renderDraftList(8)}</aside>
+                  <aside className="space-y-3">
+                    {renderDraftList(8)}
+                    {renderDocumentOverview()}
+                    {renderPublishPreviews()}
+                    {renderWritingGuide()}
+                  </aside>
                 </div>
               </div>
             </div>
@@ -1080,7 +1611,7 @@ export default function CreatePostPage() {
       : null;
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-slate-50 to-white pb-12 pt-6 dark:from-slate-950 dark:to-slate-900">
+    <div className="relative min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_28%),linear-gradient(180deg,rgba(248,250,252,1),rgba(255,255,255,1))] pb-12 pt-6 dark:bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.12),transparent_30%),linear-gradient(180deg,rgba(2,6,23,1),rgba(15,23,42,1))]">
       <input
         ref={thumbnailInputRef}
         type="file"
@@ -1092,16 +1623,19 @@ export default function CreatePostPage() {
       />
 
       <div className="mx-auto w-full max-w-[1440px] space-y-6 px-4 sm:px-6 lg:px-8">
-        <header className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
+        <header className="overflow-hidden rounded-[32px] border border-slate-200 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] p-5 shadow-[0_28px_70px_-42px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-[linear-gradient(135deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                Blog Writing Studio
+              </p>
               <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
                 {isEditMode ? "글 수정" : "새 글 작성"}
               </h1>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
                 {isEditMode
-                  ? "기존 글을 수정하고 바로 반영할 수 있습니다."
-                  : "워드처럼 바로 작성하고 이미지도 붙여넣기로 업로드할 수 있습니다."}
+                  ? "기존 글을 다듬고, 제목 구조와 카드 노출 요소까지 함께 점검할 수 있습니다."
+                  : "실제 블로그 작성기처럼 본문 구조와 카드 메타를 같이 잡으면서 작성할 수 있습니다."}
               </p>
             </div>
 
@@ -1138,22 +1672,44 @@ export default function CreatePostPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span>글자 수 {plainText.length.toLocaleString()}자</span>
-            <span>·</span>
-            <span>
+          <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <span
+              className={[
+                "rounded-full px-3 py-1.5",
+                completedChecklistCount === publishChecklist.length
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200"
+                  : "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-200",
+              ].join(" ")}
+            >
+              {composerStatusLabel}
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 dark:bg-slate-800">
+              글자 수 {plainText.length.toLocaleString()}자
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 dark:bg-slate-800">
+              예상 {estimatedReadMinutes}분
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 dark:bg-slate-800">
+              제목 {tocItems.length}개
+            </span>
+            {resolvedSeriesLabel ? (
+              <span className="rounded-full bg-slate-100 px-3 py-1.5 dark:bg-slate-800">
+                {resolvedSeriesLabel}
+              </span>
+            ) : null}
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 dark:bg-slate-800">
+              {activeDraftId ? `Draft #${activeDraftId}` : "새 글"}
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 dark:bg-slate-800">
               마지막 저장{" "}
               {lastSavedAt
                 ? new Date(lastSavedAt).toLocaleString("ko-KR")
                 : "-"}
             </span>
-            <span>·</span>
-            <span>{activeDraftId ? `Draft #${activeDraftId}` : "새 글"}</span>
             {isEditMode ? (
-              <>
-                <span>·</span>
-                <span>수정 대상 #{editingPostId}</span>
-              </>
+              <span className="rounded-full bg-slate-100 px-3 py-1.5 dark:bg-slate-800">
+                수정 대상 #{editingPostId}
+              </span>
             ) : null}
           </div>
         </header>
@@ -1170,14 +1726,15 @@ export default function CreatePostPage() {
 
           <aside className="space-y-4">
             {renderDraftList()}
+            {renderDocumentOverview()}
+            {renderPublishPreviews()}
             <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
                   발행 준비 상태
                 </h2>
                 <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                  {publishChecklist.filter((item) => item.done).length}/
-                  {publishChecklist.length} 완료
+                  {completedChecklistCount}/{publishChecklist.length} 완료
                 </span>
               </div>
               <div className="mt-3 space-y-2">
@@ -1199,29 +1756,7 @@ export default function CreatePostPage() {
                 ))}
               </div>
             </section>
-
-            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                작성 안내
-              </h2>
-              <ul className="mt-3 space-y-1.5 text-xs leading-5 text-slate-600 dark:text-slate-400">
-                <li>
-                  • Ctrl+V, 드래그앤드롭으로 이미지를 본문에 넣을 수 있습니다.
-                </li>
-                <li>
-                  • 대표 이미지는 직접 업로드 또는 본문 첫 이미지 자동
-                  선택입니다.
-                </li>
-                <li>• 8초 간격으로 자동 임시저장이 동작합니다.</li>
-              </ul>
-
-              <Link
-                to="/posts"
-                className="mt-4 inline-flex text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-300 dark:hover:text-blue-200"
-              >
-                목록으로 돌아가기
-              </Link>
-            </section>
+            {renderWritingGuide()}
           </aside>
         </div>
       </div>

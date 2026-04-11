@@ -4,6 +4,9 @@ export type PostComposerFormValues = {
   title: string;
   subtitle: string;
   category: string;
+  seriesId: string;
+  seriesTitle: string;
+  seriesOrder: string;
   tagsText: string;
   thumbnailUrl: string;
   contentHtml: string;

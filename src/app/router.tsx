@@ -27,6 +27,7 @@ const TagHubPage = lazy(() => import("../features/post/pages/TagHubPage"));
 const PostListPage = lazy(() => import("../features/post/pages/PostListPage"));
 const CreatePostPage = lazy(() => import("../features/post/pages/CreatePostPage"));
 const PostDetailPage = lazy(() => import("../features/post/pages/PostDetailPage"));
+const SeriesDetailPage = lazy(() => import("../features/post/pages/SeriesDetailPage"));
 const MyPage = lazy(() => import("../features/social/pages/MyPage"));
 const ChatPage = lazy(() => import("../features/chat/pages/ChatPage"));
 const NotificationsPage = lazy(() => import("../features/notifications/pages/NotificationsPage"));
@@ -196,6 +197,14 @@ export default function AppRouter() {
                 element={
                   <LazyRoute>
                     <PostDetailPage />
+                  </LazyRoute>
+                }
+              />
+              <Route
+                path="/series/:seriesId"
+                element={
+                  <LazyRoute>
+                    <SeriesDetailPage />
                   </LazyRoute>
                 }
               />
