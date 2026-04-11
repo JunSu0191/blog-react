@@ -168,8 +168,11 @@ function normalizePostSummary(raw: unknown): BlogProfilePost {
   const source = unwrapApiData(raw);
   const row = toRecord(source) || {};
   const categoryRow = toRecord(row.category);
+  const seriesRow = toRecord(row.series);
   const categoryName =
     toText(categoryRow?.name) || toText(row.categoryName) || toText(row.category);
+  const seriesTitle =
+    toText(seriesRow?.title) || toText(row.seriesTitle) || toText(seriesRow?.name);
 
   return {
     id: toNumber(row.id),
@@ -181,6 +184,15 @@ function normalizePostSummary(raw: unknown): BlogProfilePost {
       ? {
           id: toMaybeNumber(categoryRow?.id),
           name: categoryName,
+        }
+      : null,
+    series: seriesTitle
+      ? {
+          id: toMaybeNumber(seriesRow?.id) ?? toMaybeNumber(row.seriesId),
+          title: seriesTitle,
+          order: toMaybeNumber(seriesRow?.order) ?? toMaybeNumber(row.seriesOrder),
+          postCount:
+            toMaybeNumber(seriesRow?.postCount) ?? toMaybeNumber(seriesRow?.count),
         }
       : null,
     tags: normalizePostTags(row.tags),

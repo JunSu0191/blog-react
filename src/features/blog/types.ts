@@ -59,6 +59,13 @@ export type BlogProfilePostCategory = {
   name: string;
 };
 
+export type BlogProfileSeries = {
+  id?: number;
+  title: string;
+  order?: number;
+  postCount?: number;
+};
+
 export type BlogProfilePost = {
   id: number;
   title: string;
@@ -66,6 +73,7 @@ export type BlogProfilePost = {
   excerpt?: string;
   thumbnailUrl?: string;
   category?: BlogProfilePostCategory | null;
+  series?: BlogProfileSeries | null;
   tags: BlogProfilePostTag[];
   viewCount: number;
   likeCount: number;

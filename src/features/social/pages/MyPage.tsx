@@ -350,7 +350,7 @@ export default function MyPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {!isMobile ? (
             <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
-              마이 허브
+              내 공간 허브
             </h2>
           ) : null}
           <SegmentedControl<ActiveTab>
@@ -381,7 +381,7 @@ export default function MyPage() {
                   </p>
                 </div>
                 <Badge className="bg-blue-600 text-white hover:bg-blue-600">
-                  {summary.stats.postCount} posts
+                  게시글 {summary.stats.postCount}개
                 </Badge>
               </div>
               {posts.length === 0 ? (
@@ -417,7 +417,7 @@ export default function MyPage() {
                   </p>
                 </div>
                 <Badge variant="outline" className="border-blue-200 text-blue-700 dark:border-blue-900/60 dark:text-blue-300">
-                  creator hub
+                  내 공간
                 </Badge>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -597,7 +597,7 @@ export default function MyPage() {
                         </p>
                       </div>
                       <Badge className="bg-blue-600 text-white hover:bg-blue-600">
-                        saved
+                        저장됨
                       </Badge>
                     </div>
                   </Link>
@@ -626,7 +626,7 @@ export default function MyPage() {
               </p>
               <div className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
                 <p>닉네임: {summary.nickname || summary.profile.displayName || "-"}</p>
-                <p>아이디: @{summary.username}</p>
+                <p>아이디: {summary.username}</p>
                 <p>웹사이트: {summary.profile.websiteUrl || "-"}</p>
                 <p>위치: {summary.profile.location || "-"}</p>
               </div>

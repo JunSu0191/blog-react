@@ -113,6 +113,13 @@ function normalizeFontScale(value: string): BlogFontScale {
   return "md";
 }
 
+function getThemePresetLabel(themePreset: BlogThemePreset) {
+  if (themePreset === "ocean") return "바다";
+  if (themePreset === "sunset") return "노을";
+  if (themePreset === "forest") return "숲";
+  return "기본";
+}
+
 export default function BlogProfilePage() {
   const { username: rawUsername } = useParams();
   const username = (rawUsername ?? "").trim();
@@ -333,7 +340,7 @@ export default function BlogProfilePage() {
                 {profileName}
               </h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                @{profileData.user.username}
+                아이디 {profileData.user.username}
               </p>
 
               <div className="mt-2">
@@ -343,7 +350,7 @@ export default function BlogProfilePage() {
                     themeClass.badge,
                   ].join(" ")}
                 >
-                  THEME · {themePreset.toUpperCase()}
+                  테마 · {getThemePresetLabel(themePreset)}
                 </span>
               </div>
 
@@ -479,6 +486,7 @@ export default function BlogProfilePage() {
                 thumbnailUrl: post.thumbnailUrl,
                 imageUrls: post.thumbnailUrl ? [post.thumbnailUrl] : [],
                 category: post.category,
+                series: post.series,
                 tags: post.tags,
                 author: profileAuthor,
                 readTimeMinutes: post.readTimeMinutes,
