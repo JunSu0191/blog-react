@@ -265,7 +265,7 @@ export default function NotificationRealtimeBridge() {
   const currentUserId =
     typeof user?.id === "number"
       ? user.id
-      : getUserId() ?? getUserIdFromToken(effectiveToken) ?? undefined;
+      : getUserIdFromToken(effectiveToken) ?? getUserId() ?? undefined;
   const activeConversationId = useMemo(() => {
     if (location.pathname !== "/chat") return undefined;
     const rawConversationId = new URLSearchParams(location.search).get("conversationId");

@@ -170,7 +170,7 @@ export default function ChatUnreadRealtimeBridge() {
   const effectiveToken = token ?? getToken();
   const currentUserId = useMemo(() => {
     if (typeof user?.id === "number") return user.id;
-    return getUserId() ?? getUserIdFromToken(effectiveToken) ?? undefined;
+    return getUserIdFromToken(effectiveToken) ?? getUserId() ?? undefined;
   }, [effectiveToken, user?.id]);
   const isEnabled = Boolean(effectiveToken && typeof currentUserId === "number");
   const { refetch } = useConversations(currentUserId, { enabled: isEnabled });

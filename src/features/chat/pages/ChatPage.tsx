@@ -196,7 +196,7 @@ export default function ChatPage() {
   const currentUserId = useMemo(() => {
     if (typeof user?.id === "number") return user.id;
     const token = getToken();
-    return getUserId() ?? getUserIdFromToken(token) ?? undefined;
+    return getUserIdFromToken(token) ?? getUserId() ?? undefined;
   }, [user?.id]);
 
   const activeSection = useChatUiStore((state) => state.activeSection);
