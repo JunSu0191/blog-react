@@ -1,8 +1,10 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
 import { useAuthContext } from "@/shared/context/useAuthContext";
 import { getToken, getUserId, getUserIdFromToken } from "@/shared/lib/auth";
+import { showBrowserNotification, shouldUseBrowserNotification } from "@/shared/lib/browserNotifications";
+import { useToast } from "@/shared/ui/ToastProvider";
 import {
   connect,
   subscribeConversationUnreadCounts,
@@ -22,6 +24,10 @@ import {
   type ChatConversation,
 } from "../api";
 import {
+  buildFriendRequestNotificationFromEvent,
+  buildFriendRequestNotificationSignature,
+} from "../userEventNotifications";
+import {
   chatConversationsQueryKey,
   chatFriendRequestsQueryKey,
   chatFriendsQueryKey,
@@ -34,6 +40,11 @@ import {
   useConversations,
 } from "../queries";
 import { chatUiStoreActions } from "../store/chatUiStore";
+import { notificationSummaryQueryKey } from "@/features/notifications";
+import type { NotificationItem, NotificationPage, NotificationSummary } from "@/features/notifications";
+
+let temporaryNotificationSequence = 0;
+const FRIEND_REQUEST_DEDUPE_TTL_MS = 10_000;
 
 function toFiniteNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -97,10 +108,65 @@ function setThreadCollection(
   return conversations.map(updater);
 }
 
+function createTemporaryNotificationId() {
+  temporaryNotificationSequence = (temporaryNotificationSequence + 1) % 1000;
+  return Date.now() * 1000 + temporaryNotificationSequence;
+}
+
+function rememberSignature(
+  cache: Map<string, number>,
+  signature: string,
+  now = Date.now(),
+) {
+  cache.set(signature, now + FRIEND_REQUEST_DEDUPE_TTL_MS);
+}
+
+function hasFreshSignature(
+  cache: Map<string, number>,
+  signature: string,
+  now = Date.now(),
+) {
+  cache.forEach((expiresAt, key) => {
+    if (expiresAt <= now) cache.delete(key);
+  });
+
+  const expiresAt = cache.get(signature);
+  return typeof expiresAt === "number" && expiresAt > now;
+}
+
+function prependNotification(
+  prev: { pages?: NotificationPage[]; pageParams?: unknown[] } | null | undefined,
+  item: NotificationItem,
+) {
+  if (!prev || !Array.isArray(prev.pages) || prev.pages.length === 0) {
+    return {
+      pageParams: [undefined],
+      pages: [{ items: [item], hasMore: false, nextCursorId: undefined }],
+    };
+  }
+
+  const alreadyExists = prev.pages.some((page) => page.items.some((entry) => entry.id === item.id));
+  if (alreadyExists) return prev;
+
+  const firstPage = prev.pages[0];
+  return {
+    ...prev,
+    pages: [
+      {
+        ...firstPage,
+        items: [item, ...firstPage.items],
+      },
+      ...prev.pages.slice(1),
+    ],
+  };
+}
+
 export default function ChatUnreadRealtimeBridge() {
   const { token, user } = useAuthContext();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const recentFriendEventSignaturesRef = useRef<Map<string, number>>(new Map());
   const effectiveToken = token ?? getToken();
   const currentUserId = useMemo(() => {
     if (typeof user?.id === "number") return user.id;
@@ -323,6 +389,52 @@ export default function ChatUnreadRealtimeBridge() {
         event.type === CHAT_SOCKET_EVENT_TYPE.FRIEND_REQUEST_RECEIVED ||
         event.type === CHAT_SOCKET_EVENT_TYPE.FRIEND_REQUEST_UPDATED
       ) {
+        const signature = buildFriendRequestNotificationSignature(
+          event.type,
+          event.payload,
+        );
+        if (hasFreshSignature(recentFriendEventSignaturesRef.current, signature)) {
+          return;
+        }
+        rememberSignature(recentFriendEventSignaturesRef.current, signature);
+        const temporaryNotification = buildFriendRequestNotificationFromEvent(
+          event.type,
+          event.payload,
+          createTemporaryNotificationId(),
+        );
+
+        if (temporaryNotification) {
+          showToast(temporaryNotification.body || temporaryNotification.title || "친구 요청 알림", "info");
+          queryClient.setQueryData<{ pages?: NotificationPage[]; pageParams?: unknown[] } | null>(
+            ["notifications", "list"],
+            (prev) => prependNotification(prev, temporaryNotification),
+          );
+          queryClient.setQueryData<NotificationSummary | undefined>(
+            notificationSummaryQueryKey(),
+            (prev) => {
+              if (!prev) {
+                return {
+                  totalCount: 1,
+                  unreadCount: 1,
+                };
+              }
+              return {
+                totalCount: prev.totalCount + 1,
+                unreadCount: prev.unreadCount + 1,
+              };
+            },
+          );
+
+          if (shouldUseBrowserNotification()) {
+            void showBrowserNotification({
+              title: temporaryNotification.title || "친구 요청",
+              body: temporaryNotification.body,
+              tag: signature,
+              linkUrl: temporaryNotification.linkUrl,
+            });
+          }
+        }
+
         queryClient.invalidateQueries({
           queryKey: chatFriendRequestsQueryKey(
             FRIEND_REQUEST_DIRECTION.RECEIVED,
@@ -370,6 +482,7 @@ export default function ChatUnreadRealtimeBridge() {
     isEnabled,
     queryClient,
     refetch,
+    showToast,
     syncMergedUnread,
   ]);
 

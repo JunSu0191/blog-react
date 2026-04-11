@@ -9,6 +9,7 @@ import {
   getUserIdFromToken,
   setUserId,
 } from "@/shared/lib/auth";
+import { resolveDisplayName } from "@/shared/lib/displayName";
 import { parseErrorMessage } from "@/shared/lib/errorParser";
 import {
   useBodyScrollLock,
@@ -154,16 +155,16 @@ function toActionErrorMessage(error: unknown, fallback: string) {
 }
 
 function userLabel(user: ChatUserLike) {
-  const nickname = typeof user.nickname === "string" ? user.nickname.trim() : "";
-  if (nickname) return nickname;
-
-  const name = typeof user.name === "string" ? user.name.trim() : "";
-  if (name) return name;
-
-  return "알 수 없음";
+  return resolveDisplayName(user, "알 수 없음");
 }
 
-function userSubLabel(..._args: unknown[]) {
+function userSubLabel(user: ChatUserLike) {
+  const username = typeof user.username === "string" ? user.username.trim() : "";
+  const name = typeof user.name === "string" ? user.name.trim() : "";
+  const label = userLabel(user);
+
+  if (username && username !== label) return username;
+  if (name && name !== label) return name;
   return undefined;
 }
 
@@ -1096,8 +1097,13 @@ export default function ChatPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="line-clamp-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                    {userSubLabel(friend)}
+                    {userLabel(friend)}
                   </p>
+                  {userSubLabel(friend) && (
+                    <p className="mt-1 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+                      {userSubLabel(friend)}
+                    </p>
+                  )}
                 </div>
                 <span
                   className={[
