@@ -35,7 +35,7 @@ export interface CommentResponse {
   likeCount: number;
   dislikeCount: number;
   myReaction: "LIKE" | "DISLIKE" | "NONE" | null;
-  replies: CommentResponse[];
+  replyCount: number;
 }
 
 const BASE = API_BASE_URL;
@@ -153,13 +153,14 @@ function normalizeCommentResponse(raw: unknown): CommentResponse {
         ? Math.max(0, Math.floor(obj.dislikeCount))
         : 0,
     myReaction,
-    replies: Array.isArray(obj.replies)
-      ? obj.replies.map((item) => normalizeCommentResponse(item))
-      : [],
+    replyCount:
+      typeof obj.replyCount === "number"
+        ? Math.max(0, Math.floor(obj.replyCount))
+        : 0,
   };
 }
 
-// 댓글 목록 조회
+// 루트 댓글 목록 조회
 export async function getComments(postId: number): Promise<CommentResponse[]> {
   try {
     const response = await api<unknown>(
@@ -169,6 +170,18 @@ export async function getComments(postId: number): Promise<CommentResponse[]> {
     return response.map((item) => normalizeCommentResponse(item));
   } catch (error) {
     console.error("댓글 조회 실패:", error);
+    return [];
+  }
+}
+
+// 특정 댓글의 답글 목록 조회
+export async function getCommentReplies(commentId: number): Promise<CommentResponse[]> {
+  try {
+    const response = await api<unknown>(`${BASE}/comments/${commentId}/replies`);
+    if (!Array.isArray(response)) return [];
+    return response.map((item) => normalizeCommentResponse(item));
+  } catch (error) {
+    console.error("답글 조회 실패:", error);
     return [];
   }
 }

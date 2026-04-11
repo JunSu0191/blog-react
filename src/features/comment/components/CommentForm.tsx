@@ -12,6 +12,7 @@ interface CommentFormProps {
   postId: number;
   parentId?: number;
   compact?: boolean;
+  presentation?: "default" | "sheet";
   onSubmitted?: () => void;
   onCancel?: () => void;
 }
@@ -20,6 +21,7 @@ export default function CommentForm({
   postId,
   parentId,
   compact = false,
+  presentation = "default",
   onSubmitted,
   onCancel,
 }: CommentFormProps) {
@@ -35,6 +37,7 @@ export default function CommentForm({
   const shouldShowMutationError =
     createCommentMutation.isError &&
     !isUnauthorizedError(createCommentMutation.error);
+  const isSheetPresentation = presentation === "sheet";
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -126,28 +129,44 @@ export default function CommentForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 sm:rounded-3xl sm:p-5"
+      className={[
+        "rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900/80",
+        isSheetPresentation ? "p-3 sm:rounded-2xl sm:p-4" : "p-3 sm:rounded-3xl sm:p-5",
+      ].join(" ")}
     >
-      <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-200">
+      <label
+        className={[
+          "mb-2 block font-bold text-slate-700 dark:text-slate-200",
+          isSheetPresentation ? "text-xs sm:text-sm" : "text-sm",
+        ].join(" ")}
+      >
         댓글 작성
       </label>
       <textarea
         value={content}
         onChange={(event) => setContent(event.target.value)}
         placeholder="생각을 남겨보세요"
-        rows={4}
+        rows={isSheetPresentation ? 3 : 4}
         disabled={createCommentMutation.isPending}
         className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 sm:rounded-2xl sm:px-4"
       />
 
-      <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+      <div
+        className={[
+          "flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3",
+          isSheetPresentation ? "mt-2.5" : "mt-3",
+        ].join(" ")}
+      >
         <p className="text-xs text-slate-500 dark:text-slate-400">
           서로 존중하는 커뮤니티 문화를 지켜주세요.
         </p>
         <Button
           type="submit"
           isLoading={createCommentMutation.isPending}
-          className="h-10 w-full rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700 sm:h-11 sm:w-auto sm:rounded-xl sm:px-5"
+          className={[
+            "w-full rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700 sm:w-auto",
+            isSheetPresentation ? "h-10 sm:px-4" : "h-10 sm:h-11 sm:rounded-xl sm:px-5",
+          ].join(" ")}
         >
           등록
         </Button>

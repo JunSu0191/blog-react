@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getComments,
+  getCommentReplies,
   createComment,
   updateComment,
   deleteComment,
@@ -13,23 +14,26 @@ type UpdateCommentVariables = {
   id: number;
   postId: number;
   req: CommentUpdateRequest;
+  parentId?: number | null;
 };
 
 type DeleteCommentVariables = {
   id: number;
   postId: number;
+  parentId?: number | null;
 };
 
-const commentsQueryKey = (postId: number) => ["comments", postId] as const;
+const rootCommentsQueryKey = (postId: number) => ["comments", postId, "roots"] as const;
+const commentRepliesQueryKey = (commentId: number) =>
+  ["comments", "replies", commentId] as const;
 
 type UseCommentsOptions = {
   enabled?: boolean;
 };
 
-// 댓글 목록 조회
 export function useComments(postId: number, options?: UseCommentsOptions) {
   return useQuery({
-    queryKey: commentsQueryKey(postId),
+    queryKey: rootCommentsQueryKey(postId),
     queryFn: () => getComments(postId),
     enabled:
       Number.isFinite(postId) &&
@@ -38,99 +42,76 @@ export function useComments(postId: number, options?: UseCommentsOptions) {
   });
 }
 
-// 댓글 생성
+export function useCommentReplies(commentId: number, options?: UseCommentsOptions) {
+  return useQuery({
+    queryKey: commentRepliesQueryKey(commentId),
+    queryFn: () => getCommentReplies(commentId),
+    enabled:
+      Number.isFinite(commentId) &&
+      commentId > 0 &&
+      (options?.enabled ?? true),
+  });
+}
+
 export function useCreateComment() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (req: CommentCreateRequest) => createComment(req),
-    onSuccess: (_, variables) => {
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({
-        queryKey: commentsQueryKey(variables.postId),
+        queryKey: rootCommentsQueryKey(variables.postId),
         exact: true,
       });
+      if (typeof variables.parentId === "number") {
+        queryClient.invalidateQueries({
+          queryKey: commentRepliesQueryKey(variables.parentId),
+          exact: true,
+        });
+      }
     },
   });
 }
 
-// 댓글 수정
 export function useUpdateComment() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, req }: UpdateCommentVariables) =>
-      updateComment(id, req),
-    onMutate: async (variables) => {
-      const key = commentsQueryKey(variables.postId);
-      await queryClient.cancelQueries({ queryKey: key });
-      const previousComments = queryClient.getQueryData<CommentResponse[]>(key);
-
-      queryClient.setQueryData<CommentResponse[]>(key, (current = []) =>
-        current.map((comment) =>
-          comment.id === variables.id
-            ? {
-                ...comment,
-                content: variables.req.content,
-                updatedAt: new Date().toISOString(),
-              }
-            : comment
-        )
-      );
-
-      return { previousComments, key };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousComments) {
-        queryClient.setQueryData(context.key, context.previousComments);
-      }
-    },
-    onSuccess: (response, variables) => {
-      if (response) {
-        queryClient.setQueryData<CommentResponse[]>(
-          commentsQueryKey(variables.postId),
-          (current = []) =>
-            current.map((comment) =>
-              comment.id === variables.id ? { ...comment, ...response } : comment
-            )
-        );
-      }
-    },
-    onSettled: (_response, _error, variables) => {
+    mutationFn: ({ id, req }: UpdateCommentVariables) => updateComment(id, req),
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({
-        queryKey: commentsQueryKey(variables.postId),
+        queryKey: rootCommentsQueryKey(variables.postId),
         exact: true,
       });
+      if (typeof variables.parentId === "number") {
+        queryClient.invalidateQueries({
+          queryKey: commentRepliesQueryKey(variables.parentId),
+          exact: true,
+        });
+      }
     },
   });
 }
 
-// 댓글 삭제
 export function useDeleteComment() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ id }: DeleteCommentVariables) => deleteComment(id),
-    onMutate: async (variables) => {
-      const key = commentsQueryKey(variables.postId);
-      await queryClient.cancelQueries({ queryKey: key });
-      const previousComments = queryClient.getQueryData<CommentResponse[]>(key);
-
-      queryClient.setQueryData<CommentResponse[]>(key, (current = []) =>
-        current.filter((comment) => comment.id !== variables.id)
-      );
-
-      return { previousComments, key };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousComments) {
-        queryClient.setQueryData(context.key, context.previousComments);
-      }
-    },
-    onSettled: (_response, _error, variables) => {
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({
-        queryKey: commentsQueryKey(variables.postId),
+        queryKey: rootCommentsQueryKey(variables.postId),
         exact: true,
       });
+      if (typeof variables.parentId === "number") {
+        queryClient.invalidateQueries({
+          queryKey: commentRepliesQueryKey(variables.parentId),
+          exact: true,
+        });
+      }
     },
   });
 }
+
+export { rootCommentsQueryKey, commentRepliesQueryKey };
+export type { CommentResponse };
