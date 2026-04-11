@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Bell,
+  Compass,
   FileText,
   Home,
   Lock,
@@ -37,8 +38,6 @@ import {
 import {
   NotificationBell,
   NotificationRealtimeBridge,
-  useNotificationSummary,
-  useNotifications,
 } from "@/features/notifications";
 import { resolveDisplayName } from "@/shared/lib/displayName";
 
@@ -61,14 +60,16 @@ type MobileBottomTab = {
   path: string;
   icon: (props: MobileTabIconProps) => ReactNode;
   adminOnly?: boolean;
+  requiresAuth?: boolean;
+  badgeType?: "chat";
 };
 
 const defaultMenuItems: MenuItem[] = [
   { label: "홈", path: "/home" },
-  { label: "글", path: "/posts" },
-  { label: "글쓰기", path: "/posts/create" },
-  { label: "채팅", path: "/chat" },
-  { label: "마이페이지", path: "/mypage" },
+  { label: "탐색", path: "/posts" },
+  { label: "작성", path: "/posts/create" },
+  { label: "메시지", path: "/chat" },
+  { label: "내 공간", path: "/mypage" },
 ];
 
 function HomeIcon({ active }: MobileTabIconProps) {
@@ -89,9 +90,18 @@ function ChatIcon({ active }: MobileTabIconProps) {
   );
 }
 
-function NotificationIcon({ active }: MobileTabIconProps) {
+function ExploreIcon({ active }: MobileTabIconProps) {
   return (
-    <Bell
+    <Compass
+      className={["h-5 w-5 transition", active ? "scale-[1.03]" : ""].join(" ")}
+      aria-hidden="true"
+    />
+  );
+}
+
+function WriteIcon({ active }: MobileTabIconProps) {
+  return (
+    <PenSquare
       className={["h-5 w-5 transition", active ? "scale-[1.03]" : ""].join(" ")}
       aria-hidden="true"
     />
@@ -118,10 +128,23 @@ function AdminIcon({ active }: MobileTabIconProps) {
 
 const mobileBottomTabs: MobileBottomTab[] = [
   { label: "홈", path: "/home", icon: HomeIcon },
-  { label: "채팅", path: "/chat", icon: ChatIcon },
-  { label: "알림", path: "/notifications", icon: NotificationIcon },
-  { label: "마이", path: "/mypage", icon: MyPageIcon },
-  { label: "관리", path: "/admin/dashboard", icon: AdminIcon, adminOnly: true },
+  { label: "탐색", path: "/posts", icon: ExploreIcon },
+  { label: "작성", path: "/posts/create", icon: WriteIcon, requiresAuth: true },
+  {
+    label: "메시지",
+    path: "/chat",
+    icon: ChatIcon,
+    requiresAuth: true,
+    badgeType: "chat",
+  },
+  { label: "내 공간", path: "/mypage", icon: MyPageIcon, requiresAuth: true },
+  {
+    label: "관리",
+    path: "/admin/dashboard",
+    icon: AdminIcon,
+    adminOnly: true,
+    requiresAuth: true,
+  },
 ];
 
 function formatSpotlightDate(value?: string) {
@@ -145,8 +168,6 @@ export default function Layout({
   const location = useLocation();
   const currentUserId =
     typeof user?.id === "number" ? user.id : undefined;
-  const { data: notificationData } = useNotifications(isAuthenticated);
-  const { data: notificationSummary } = useNotificationSummary(isAuthenticated);
   const { data: chatUnreadCount = 0 } = useChatTotalUnreadCount(currentUserId);
   const userDisplayName = useMemo(() => {
     return resolveDisplayName(user || {}, "로그인 사용자");
@@ -154,7 +175,7 @@ export default function Layout({
   const myBlogPath = useMemo(() => {
     const username = typeof user?.username === "string" ? user.username.trim() : "";
     return username ? `/${encodeURIComponent(username)}` : "/login";
-  }, [user?.username]);
+  }, [user]);
   const userInitial = userDisplayName.slice(0, 1).toUpperCase() || "U";
   const isMobileChatConversationOpen =
     isAuthenticated &&
@@ -187,11 +208,6 @@ export default function Layout({
     () => spotlightSearchQuery.data?.content ?? [],
     [spotlightSearchQuery.data?.content],
   );
-
-  useEffect(() => {
-    if (isSpotlightOpen) return;
-    setSpotlightSearchKeyword(activeFeedSearchKeyword);
-  }, [activeFeedSearchKeyword, isSpotlightOpen]);
 
   const handleLogout = () => {
     logout();
@@ -252,28 +268,16 @@ export default function Layout({
     };
   }, [openSpotlightSearch]);
 
-  const unreadNotificationCount = useMemo(() => {
-    if (!isAuthenticated) return 0;
-    if (typeof notificationSummary?.unreadCount === "number") {
-      return notificationSummary.unreadCount;
-    }
-    const notifications = (notificationData?.pages || []).flatMap(
-      (page) => page.items,
-    );
-    return notifications.filter((item) => !item.isRead).length;
-  }, [isAuthenticated, notificationData?.pages, notificationSummary?.unreadCount]);
   const unreadChatCount = isAuthenticated ? chatUnreadCount : 0;
   const isAdminUser = user?.role?.toUpperCase() === "ADMIN";
   const resolvedMenuItems = useMemo(() => {
-    const baseItems = isAuthenticated
-      ? menuItems
-      : menuItems.filter((item) => item.path !== "/mypage");
+    const baseItems = [...menuItems];
     const normalizedRole = user?.role?.toUpperCase();
     if (normalizedRole !== "ADMIN") return baseItems;
     const hasAdmin = baseItems.some((item) => item.path === "/admin/dashboard");
     if (hasAdmin) return baseItems;
     return [...baseItems, { label: "관리자", path: "/admin/dashboard" }];
-  }, [isAuthenticated, menuItems, user?.role]);
+  }, [menuItems, user?.role]);
 
   const isMenuActive = (path: string) => {
     if (path === "/home") {
@@ -282,6 +286,9 @@ export default function Layout({
     if (path === "/posts") {
       return (
         location.pathname === "/posts" ||
+        location.pathname === "/search" ||
+        location.pathname.startsWith("/categories/") ||
+        location.pathname.startsWith("/tags/") ||
         /^\/posts\/\d+$/.test(location.pathname) ||
         /^\/posts\/\d+\/edit$/.test(location.pathname)
       );
@@ -295,7 +302,7 @@ export default function Layout({
     return location.pathname === path;
   };
 
-  const shouldRenderMobileBottomNav = isAuthenticated;
+  const shouldRenderMobileBottomNav = true;
   const shouldHideMobileChatChrome = isMobileChatConversationOpen;
   const shouldUseRouteEnter = location.pathname !== "/chat";
   const visibleMobileBottomTabs = useMemo(
@@ -326,12 +333,26 @@ export default function Layout({
         >
           <Link
             to="/home"
-            className="text-lg font-black tracking-tight text-slate-900 dark:text-slate-100"
+            className="group flex min-w-0 items-center gap-3"
           >
-            Blog Pause
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-[0_16px_34px_-20px_rgba(37,99,235,0.95)] ring-1 ring-blue-400/30 transition group-hover:scale-[1.03] dark:ring-blue-300/25">
+              <img
+                src="/favicon.svg"
+                alt="Blog Pause 아이콘"
+                className="h-full w-full object-cover"
+              />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-base font-black tracking-tight text-slate-900 dark:text-slate-100">
+                Blog Pause
+              </span>
+              <span className="hidden truncate text-[11px] font-medium text-slate-500 lg:block dark:text-slate-400">
+                발견하고 기록하고, 바로 대화하는 블로그
+              </span>
+            </span>
           </Link>
 
-          <nav className="hidden items-center gap-2 md:flex">
+          <nav className="hidden items-center gap-1 rounded-2xl border border-slate-200/90 bg-slate-50/90 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] md:flex dark:border-slate-800/80 dark:bg-slate-900/70 dark:shadow-none">
             {resolvedMenuItems.map((item) => {
               const isActive = isMenuActive(item.path);
               const showChatUnreadBadge =
@@ -362,10 +383,10 @@ export default function Layout({
                     }
                   }}
                   className={[
-                    "rounded-xl px-4 py-2 text-sm font-semibold transition",
+                    "relative rounded-xl px-3.5 py-2 text-sm font-semibold transition",
                     isActive
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+                      ? "bg-blue-600 text-white shadow-[0_18px_36px_-22px_rgba(37,99,235,0.92)] ring-1 ring-blue-500/35 dark:bg-blue-500 dark:text-white dark:ring-blue-300/30 dark:shadow-[0_18px_38px_-24px_rgba(37,99,235,0.75)]"
+                      : "text-slate-600 hover:bg-white hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-950 dark:hover:text-slate-100",
                   ].join(" ")}
                 >
                   <span className="inline-flex items-center gap-1.5">
@@ -375,7 +396,7 @@ export default function Layout({
                         className={[
                           "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none",
                           isActive
-                            ? "bg-white/20 text-white hover:bg-white/20"
+                            ? "bg-white/20 text-white hover:bg-white/20 dark:bg-white/15 dark:text-white"
                             : "bg-rose-600 text-white hover:bg-rose-600",
                         ].join(" ")}
                       >
@@ -477,16 +498,7 @@ export default function Layout({
 
             {isAuthenticated ? (
               <>
-                <Link to={myBlogPath} aria-label="내 블로그 이동">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 rounded-lg px-2.5 text-[11px]"
-                  >
-                    블로그
-                  </Button>
-                </Link>
+                <NotificationBell />
                 <Link to="/mypage" aria-label="마이페이지 이동">
                   <Avatar className="h-8 w-8 border border-blue-200/80 dark:border-blue-900/50">
                     <AvatarFallback className="bg-blue-600 text-[11px] font-semibold text-white">
@@ -642,12 +654,21 @@ export default function Layout({
             </CommandItem>
             <CommandItem
               onSelect={() => {
+                navigate("/posts");
+                setIsSpotlightOpen(false);
+              }}
+            >
+              <Compass className="h-4 w-4" />
+              <span>탐색</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
                 navigateWithAuth("/posts/create", true);
                 setIsSpotlightOpen(false);
               }}
             >
               <PenSquare className="h-4 w-4" />
-              <span>글쓰기</span>
+              <span>작성</span>
             </CommandItem>
             <CommandItem
               onSelect={() => {
@@ -656,7 +677,7 @@ export default function Layout({
               }}
             >
               <MessageCircle className="h-4 w-4" />
-              <span>채팅</span>
+              <span>메시지</span>
             </CommandItem>
             <CommandItem
               onSelect={() => {
@@ -665,7 +686,7 @@ export default function Layout({
               }}
             >
               <UserRound className="h-4 w-4" />
-              <span>마이페이지</span>
+              <span>내 공간</span>
             </CommandItem>
             <CommandItem
               onSelect={() => {
@@ -728,9 +749,7 @@ export default function Layout({
               const isActive = isMenuActive(tab.path);
               const Icon = tab.icon;
               const badgeCount =
-                tab.path === "/notifications"
-                  ? unreadNotificationCount
-                  : tab.path === "/chat"
+                tab.badgeType === "chat"
                     ? unreadChatCount
                     : 0;
               const showUnreadBadge = badgeCount > 0;
@@ -738,11 +757,16 @@ export default function Layout({
                 <Link
                   key={tab.path}
                   to={tab.path}
+                  onClick={(event) => {
+                    if (!tab.requiresAuth || isAuthenticated) return;
+                    event.preventDefault();
+                    openLoginPrompt(tab.path);
+                  }}
                   className={[
-                    "relative flex h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-semibold transition",
+                    "relative flex h-14 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold transition",
                     isActive
-                      ? "bg-blue-600 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
+                      ? "bg-blue-600 text-white shadow-[0_20px_40px_-28px_rgba(37,99,235,0.92)] ring-1 ring-blue-500/35 dark:bg-blue-500 dark:text-white dark:ring-blue-300/30"
+                      : "bg-slate-100/95 text-slate-600 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
                   ].join(" ")}
                 >
                   <span className="relative inline-flex">

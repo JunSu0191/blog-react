@@ -1,9 +1,12 @@
-import { toast } from "react-toastify";
 import { parseErrorMessage } from "./errorParser";
+import { emitFeedback } from "@/shared/ui/feedbackBus";
 
 export function showErrorToast(
   error: unknown,
   fallback?: string,
 ) {
-  toast.error(parseErrorMessage(error, fallback));
+  emitFeedback({
+    message: parseErrorMessage(error, fallback),
+    level: "error",
+  });
 }

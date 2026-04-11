@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import NotificationList from "./NotificationList";
 import { useNotifications, useNotificationSummary } from "../queries";
 
 export default function NotificationBell() {
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const { data } = useNotifications();
@@ -45,11 +48,18 @@ export default function NotificationBell() {
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-expanded={open}
-        aria-haspopup="dialog"
+        onClick={() => {
+          if (isMobile) {
+            navigate("/notifications");
+            return;
+          }
+
+          setOpen((prev) => !prev);
+        }}
+        aria-expanded={isMobile ? undefined : open}
+        aria-haspopup={isMobile ? undefined : "dialog"}
         title="알림"
-        aria-label="알림 열기"
+        aria-label={isMobile ? "알림 페이지로 이동" : "알림 열기"}
         className="group relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
       >
         <Bell className="h-4 w-4" aria-hidden="true" />
@@ -63,23 +73,25 @@ export default function NotificationBell() {
         </span>
       </button>
 
-      <div
-        className={[
-          "absolute right-0 z-50 mt-2 w-[360px] origin-top-right rounded-2xl border border-slate-200 bg-white p-3 shadow-xl transition-all duration-220 ease-out dark:border-slate-700 dark:bg-slate-900",
-          open
-            ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
-            : "pointer-events-none -translate-y-1.5 scale-[0.98] opacity-0",
-        ].join(" ")}
-      >
-        <NotificationList compact />
-        <Link
-          to="/notifications"
-          onClick={() => setOpen(false)}
-          className="mt-3 block rounded-lg bg-slate-50 px-3 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+      {!isMobile ? (
+        <div
+          className={[
+            "absolute right-0 z-50 mt-2 w-[360px] origin-top-right rounded-2xl border border-slate-200 bg-white p-3 shadow-xl transition-all duration-220 ease-out dark:border-slate-700 dark:bg-slate-900",
+            open
+              ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
+              : "pointer-events-none -translate-y-1.5 scale-[0.98] opacity-0",
+          ].join(" ")}
         >
-          전체 알림 보기
-        </Link>
-      </div>
+          <NotificationList compact />
+          <Link
+            to="/notifications"
+            onClick={() => setOpen(false)}
+            className="mt-3 block rounded-lg bg-slate-50 px-3 py-2 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            전체 알림 보기
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }
