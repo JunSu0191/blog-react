@@ -468,7 +468,11 @@ function normalizeSeriesRef(
     toRecord(fallbackRecord?.seriesInfo) ??
     toRecord(fallbackRecord?.seriesItem) ??
     toRecord(fallbackRecord?.seriesMembership);
-  const source = nested ?? fallbackRecord;
+  const hasFallbackSeriesFields =
+    typeof toPositiveNumber(fallbackRecord?.seriesId) === "number" ||
+    typeof toText(fallbackRecord?.seriesTitle) === "string" ||
+    typeof toPositiveNumber(fallbackRecord?.seriesOrder) === "number";
+  const source = nested ?? (hasFallbackSeriesFields ? fallbackRecord : undefined);
 
   if (!source) return null;
 
