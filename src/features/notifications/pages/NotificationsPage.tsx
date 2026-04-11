@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SegmentedControl, SurfaceCard } from "@/shared/ui";
 import NotificationList from "../components/NotificationList";
+import NotificationPushSettings from "../components/NotificationPushSettings";
 
 type NotificationTab = "all" | "comment" | "chat" | "unread";
 
@@ -18,6 +19,7 @@ export default function NotificationsPage() {
 
       <SurfaceCard className="p-4 sm:p-6">
         <div className="space-y-4">
+          <NotificationPushSettings />
           <SegmentedControl<NotificationTab>
             value={activeTab}
             onChange={setActiveTab}

@@ -1,6 +1,13 @@
 import { API_BASE_URL, api } from "@/shared/lib/api";
 
-export type NotificationType = "POST_COMMENT" | "CHAT_MESSAGE" | string;
+export type NotificationType =
+  | "POST_COMMENT"
+  | "CHAT_MESSAGE"
+  | "FRIEND_REQUEST_RECEIVED"
+  | "FRIEND_REQUEST_ACCEPTED"
+  | "FRIEND_REQUEST_REJECTED"
+  | "FRIEND_REQUEST_CANCELED"
+  | string;
 
 export type NotificationPayload = {
   postId?: number;
@@ -10,6 +17,12 @@ export type NotificationPayload = {
   conversationId?: number;
   messageId?: number;
   senderId?: number;
+  requestId?: number;
+  requesterId?: number;
+  requesterName?: string;
+  requesterNickname?: string;
+  requesterDisplayName?: string;
+  targetUserId?: number;
 } & Record<string, unknown>;
 
 export type NotificationItem = {
@@ -80,6 +93,15 @@ function buildDefaultLink(type: NotificationType | undefined, payload: Notificat
     return "/chat";
   }
 
+  if (
+    type === "FRIEND_REQUEST_RECEIVED" ||
+    type === "FRIEND_REQUEST_ACCEPTED" ||
+    type === "FRIEND_REQUEST_REJECTED" ||
+    type === "FRIEND_REQUEST_CANCELED"
+  ) {
+    return "/chat";
+  }
+
   return undefined;
 }
 
@@ -107,6 +129,46 @@ export function toNotificationContent(item: NotificationItem) {
     return {
       title: "새 채팅 메시지",
       body: "대화방에 새로운 메시지가 도착했습니다.",
+      linkUrl: item.linkUrl || buildDefaultLink(item.type, item.payload),
+    };
+  }
+
+  if (item.type === "FRIEND_REQUEST_RECEIVED") {
+    return {
+      title: "친구 요청",
+      body:
+        item.body ||
+        "새 친구 요청이 도착했습니다.",
+      linkUrl: item.linkUrl || buildDefaultLink(item.type, item.payload),
+    };
+  }
+
+  if (item.type === "FRIEND_REQUEST_ACCEPTED") {
+    return {
+      title: "친구 요청 수락",
+      body:
+        item.body ||
+        "보낸 친구 요청이 수락되었습니다.",
+      linkUrl: item.linkUrl || buildDefaultLink(item.type, item.payload),
+    };
+  }
+
+  if (item.type === "FRIEND_REQUEST_REJECTED") {
+    return {
+      title: "친구 요청 거절",
+      body:
+        item.body ||
+        "보낸 친구 요청이 거절되었습니다.",
+      linkUrl: item.linkUrl || buildDefaultLink(item.type, item.payload),
+    };
+  }
+
+  if (item.type === "FRIEND_REQUEST_CANCELED") {
+    return {
+      title: "친구 요청 취소",
+      body:
+        item.body ||
+        "친구 요청이 취소되었습니다.",
       linkUrl: item.linkUrl || buildDefaultLink(item.type, item.payload),
     };
   }

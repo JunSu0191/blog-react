@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
+import {
+  showBrowserNotification,
+  shouldUseBrowserNotification,
+} from "@/shared/lib/browserNotifications";
 import { connect, subscribeNotifications } from "@/shared/socket/stompClient";
 import { useAuthContext } from "@/shared/context/useAuthContext";
 import { getToken, getUserId, getUserIdFromToken } from "@/shared/lib/auth";
@@ -338,11 +342,18 @@ export default function NotificationRealtimeBridge() {
           toastSessionStartedAtRef.current,
           extracted.createdAt,
         );
-        if (!shouldSuppressToast) {
-          showToast(extracted.fallbackMessage || "새 알림이 도착했습니다.", "info");
+      if (!shouldSuppressToast) {
+        showToast(extracted.fallbackMessage || "새 알림이 도착했습니다.", "info");
+        if (shouldUseBrowserNotification()) {
+          void showBrowserNotification({
+            title: "새 알림",
+            body: extracted.fallbackMessage || "새 알림이 도착했습니다.",
+            tag: extracted.dedupeSignature,
+          });
         }
-        void queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
-        void queryClient.invalidateQueries({ queryKey: notificationSummaryQueryKey() });
+      }
+      void queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
+      void queryClient.invalidateQueries({ queryKey: notificationSummaryQueryKey() });
         return;
       }
       const notification = extracted.item;
@@ -380,6 +391,14 @@ export default function NotificationRealtimeBridge() {
           content.title || content.body || "새 알림이 도착했습니다.",
           getToastLevel(notification),
         );
+        if (shouldUseBrowserNotification()) {
+          void showBrowserNotification({
+            title: content.title || "새 알림",
+            body: content.body || undefined,
+            tag: extracted.dedupeSignature,
+            linkUrl: content.linkUrl,
+          });
+        }
       }
 
       queryClient.setQueryData(["notifications", "list"], (prev: unknown) => {
@@ -462,6 +481,14 @@ export default function NotificationRealtimeBridge() {
         ) || shouldSuppressChatToast(item, activeConversationId);
       if (!shouldSuppressToast) {
         showToast(content.title || content.body || "새 알림이 도착했습니다.", getToastLevel(item));
+        if (shouldUseBrowserNotification()) {
+          void showBrowserNotification({
+            title: content.title || "새 알림",
+            body: content.body || undefined,
+            tag: buildSignatureFromItem(item),
+            linkUrl: content.linkUrl,
+          });
+        }
       }
     });
   }, [activeConversationId, effectiveToken, notificationData, showToast]);

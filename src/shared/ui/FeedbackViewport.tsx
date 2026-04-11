@@ -90,9 +90,10 @@ function feedbackAppearance(level: FeedbackLevel, presentation: FeedbackPresenta
     return {
       icon: Info,
       shell:
-        "border-blue-200/90 bg-white/96 text-slate-900 shadow-[0_20px_56px_-36px_rgba(37,99,235,0.5)] dark:border-slate-700 dark:bg-slate-900/96 dark:text-slate-100",
-      accent: "text-blue-600 dark:text-blue-300",
-      action: "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800",
+        "border-blue-200/90 bg-white/96 text-slate-900 shadow-[0_20px_56px_-36px_rgba(37,99,235,0.5)] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-50",
+      accent: "text-blue-600 dark:text-blue-200",
+      action:
+        "text-slate-600 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800",
     };
   }
 
@@ -100,44 +101,49 @@ function feedbackAppearance(level: FeedbackLevel, presentation: FeedbackPresenta
     return {
       icon: TriangleAlert,
       shell:
-        "border-amber-200/90 bg-amber-50/95 text-amber-950 shadow-[0_20px_56px_-36px_rgba(180,83,9,0.62)] dark:border-amber-900/70 dark:bg-amber-950/86 dark:text-amber-50",
-      accent: "text-amber-600 dark:text-amber-300",
-      action: "text-amber-700 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/60",
+        "border-amber-200/90 bg-amber-50/95 text-amber-950 shadow-[0_20px_56px_-36px_rgba(180,83,9,0.62)] dark:border-amber-800 dark:bg-amber-950 dark:text-amber-50",
+      accent: "text-amber-600 dark:text-amber-200",
+      action:
+        "text-amber-700 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-900/60",
     };
   }
   if (level === "error") {
     return {
       icon: CircleAlert,
       shell:
-        "border-rose-200/90 bg-rose-50/95 text-rose-950 shadow-[0_22px_60px_-38px_rgba(225,29,72,0.65)] dark:border-rose-900/70 dark:bg-rose-950/88 dark:text-rose-50",
-      accent: "text-rose-600 dark:text-rose-300",
-      action: "text-rose-700 hover:bg-rose-100 dark:text-rose-200 dark:hover:bg-rose-900/60",
+        "border-rose-200/90 bg-rose-50/95 text-rose-950 shadow-[0_22px_60px_-38px_rgba(225,29,72,0.65)] dark:border-rose-800 dark:bg-rose-950 dark:text-rose-50",
+      accent: "text-rose-600 dark:text-rose-200",
+      action:
+        "text-rose-700 hover:bg-rose-100 dark:text-rose-100 dark:hover:bg-rose-900/60",
     };
   }
   if (level === "success") {
     return {
       icon: CheckCircle2,
       shell:
-        "border-emerald-200/90 bg-emerald-50/95 text-emerald-950 shadow-[0_22px_60px_-38px_rgba(5,150,105,0.62)] dark:border-emerald-900/70 dark:bg-emerald-950/88 dark:text-emerald-50",
-      accent: "text-emerald-600 dark:text-emerald-300",
-      action: "text-emerald-700 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/60",
+        "border-emerald-200/90 bg-emerald-50/95 text-emerald-950 shadow-[0_22px_60px_-38px_rgba(5,150,105,0.62)] dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-50",
+      accent: "text-emerald-600 dark:text-emerald-200",
+      action:
+        "text-emerald-700 hover:bg-emerald-100 dark:text-emerald-100 dark:hover:bg-emerald-900/60",
     };
   }
   if (level === "info") {
     return {
       icon: Info,
       shell:
-        "border-blue-200/90 bg-white/96 text-slate-900 shadow-[0_22px_60px_-38px_rgba(37,99,235,0.58)] dark:border-slate-700 dark:bg-slate-900/96 dark:text-slate-100",
-      accent: "text-blue-600 dark:text-blue-300",
-      action: "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800",
+        "border-blue-200/90 bg-white/96 text-slate-900 shadow-[0_22px_60px_-38px_rgba(37,99,235,0.58)] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-50",
+      accent: "text-blue-600 dark:text-blue-200",
+      action:
+        "text-slate-600 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800",
     };
   }
   return {
     icon: Info,
     shell:
-      "border-slate-200/90 bg-white/96 text-slate-900 shadow-[0_22px_60px_-38px_rgba(15,23,42,0.42)] dark:border-slate-700 dark:bg-slate-900/96 dark:text-slate-100",
-    accent: "text-slate-500 dark:text-slate-300",
-    action: "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800",
+      "border-slate-200/90 bg-white/96 text-slate-900 shadow-[0_22px_60px_-38px_rgba(15,23,42,0.42)] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-50",
+    accent: "text-slate-500 dark:text-slate-200",
+    action:
+      "text-slate-600 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800",
   };
 }
 

@@ -36,6 +36,7 @@ import {
   useChatTotalUnreadCount,
 } from "@/features/chat";
 import {
+  BrowserNotificationBootstrap,
   NotificationBell,
   NotificationRealtimeBridge,
 } from "@/features/notifications";
@@ -315,6 +316,7 @@ export default function Layout({
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      {isAuthenticated ? <BrowserNotificationBootstrap /> : null}
       {isAuthenticated ? <NotificationRealtimeBridge /> : null}
       {isAuthenticated ? <ChatUnreadRealtimeBridge /> : null}
 
