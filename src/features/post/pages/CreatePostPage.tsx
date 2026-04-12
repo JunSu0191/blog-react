@@ -40,6 +40,7 @@ import {
   stripHtml,
   stringifyTags,
 } from "../utils/postContent";
+import { createSharePreview } from "../utils/sharePreview";
 
 const ThumbnailMode = {
   AUTO_FROM_CONTENT: "auto_from_content",
@@ -371,6 +372,27 @@ export default function CreatePostPage() {
       ? `${normalizedSeriesTitle} · ${normalizedSeriesOrder}편`
       : normalizedSeriesTitle
     : "";
+  const sharePreview = useMemo(
+    () =>
+      createSharePreview({
+        title: normalizedTitle,
+        subtitle: normalizedSubtitle,
+        contentHtml: resolvedContentHtml,
+        thumbnailUrl: effectiveThumbnailUrl,
+        categoryName: resolvedCategoryLabel,
+        seriesTitle: resolvedSeriesLabel,
+        readTimeMinutes: estimatedReadMinutes,
+      }),
+    [
+      effectiveThumbnailUrl,
+      estimatedReadMinutes,
+      normalizedSubtitle,
+      normalizedTitle,
+      resolvedCategoryLabel,
+      resolvedContentHtml,
+      resolvedSeriesLabel,
+    ],
+  );
 
   const canPublish =
     normalizedTitle.length > 0 &&
@@ -1364,7 +1386,7 @@ export default function CreatePostPage() {
     <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-          발행 미리보기
+          공유/발행 미리보기
         </h2>
         <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
           카드 3종
@@ -1435,32 +1457,44 @@ export default function CreatePostPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[28px] border border-blue-200 bg-[linear-gradient(135deg,rgba(37,99,235,0.96),rgba(79,70,229,0.92))] p-5 text-white shadow-[0_26px_60px_-36px_rgba(37,99,235,0.75)] dark:border-blue-500/30">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-100/90">
-            OG Preview
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+          <p className="px-4 pt-4 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+            Link Share Preview
           </p>
-          <div className="mt-5 flex min-h-[180px] flex-col justify-between gap-4">
-            <div>
-              <p className="max-w-[24rem] text-2xl font-black tracking-tight">
-                {normalizedTitle || "소셜 카드 제목을 입력해 주세요."}
-              </p>
-              <p className="mt-3 max-w-[28rem] text-sm text-blue-50/90">
-                {previewExcerpt}
-              </p>
+          <div className="mt-3 border-y border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70">
+            <div className="flex gap-3">
+              <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-200 dark:bg-slate-700">
+                <img
+                  src={sharePreview.imageUrl}
+                  alt="링크 공유 대표 이미지"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-1 text-sm font-black text-slate-900 dark:text-slate-100">
+                  {sharePreview.title}
+                </p>
+                <p className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                  {sharePreview.description}
+                </p>
+                <p className="mt-2 line-clamp-1 text-[11px] text-slate-400 dark:text-slate-500">
+                  {sharePreview.canonicalUrl}
+                </p>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-blue-50/90">
-              <span className="rounded-full bg-white/14 px-2.5 py-1">
-                {resolvedCategoryLabel}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 p-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+              {sharePreview.categoryLabel}
+            </span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800">
+              {sharePreview.readTimeLabel}
+            </span>
+            {sharePreview.seriesLabel ? (
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800">
+                {sharePreview.seriesLabel}
               </span>
-              <span className="rounded-full bg-white/14 px-2.5 py-1">
-                {estimatedReadMinutes}분 읽기
-              </span>
-              {resolvedSeriesLabel ? (
-                <span className="rounded-full bg-white/14 px-2.5 py-1">
-                  {resolvedSeriesLabel}
-                </span>
-              ) : null}
-            </div>
+            ) : null}
           </div>
         </div>
       </div>

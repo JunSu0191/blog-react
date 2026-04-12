@@ -22,6 +22,7 @@ import {
   resolveSeriesPath,
   sanitizeHtml,
 } from '../utils/postContent';
+import { applyDocumentSharePreview, createSharePreview } from '../utils/sharePreview';
 
 const MOBILE_BREAKPOINT = 1024;
 
@@ -64,17 +65,6 @@ function formatDate(value?: string) {
     month: 'long',
     day: 'numeric',
   });
-}
-
-function summarizePost(contentHtml: string, subtitle?: string) {
-  const preferred = subtitle?.trim();
-  if (preferred) return preferred;
-
-  return contentHtml
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 140);
 }
 
 export default function PostDetailPage() {
@@ -120,10 +110,6 @@ export default function PostDetailPage() {
   const commentCount = useMemo(
     () => countTotalComments(commentsQuery.data || []),
     [commentsQuery.data],
-  );
-  const postSummary = useMemo(
-    () => summarizePost(resolvedContentHtml, post?.subtitle),
-    [post?.subtitle, resolvedContentHtml],
   );
   const isMobileCommentOpen = isMobile && isMobileCommentSheetOpen;
   const mobileCommentViewportHeight = useMobileVisualViewportHeight(isMobileCommentOpen);
@@ -171,6 +157,31 @@ export default function PostDetailPage() {
     if (!post) return 1;
     return post.readTimeMinutes || estimateReadTimeMinutes(resolvedContentHtml);
   }, [post, resolvedContentHtml]);
+  const sharePreview = useMemo(
+    () =>
+      createSharePreview({
+        title: post?.title,
+        subtitle: post?.subtitle,
+        excerpt: post?.excerpt,
+        contentHtml: resolvedContentHtml,
+        thumbnailUrl: post?.thumbnailUrl,
+        categoryName: post?.category?.name,
+        seriesTitle: post?.series?.title,
+        readTimeMinutes,
+        postPath: typeof post?.id === 'number' ? resolvePostPath(post.id) : undefined,
+      }),
+    [
+      post?.category?.name,
+      post?.excerpt,
+      post?.id,
+      post?.series?.title,
+      post?.subtitle,
+      post?.thumbnailUrl,
+      post?.title,
+      readTimeMinutes,
+      resolvedContentHtml,
+    ],
+  );
 
   const previousPost = post?.previousPost || null;
   const nextPost = post?.nextPost || null;
@@ -188,6 +199,11 @@ export default function PostDetailPage() {
     hasAuthorId &&
     user.id === authorId;
   const canManagePost = Boolean(user) && (isAdmin || isAuthor);
+
+  useEffect(() => {
+    if (!post) return;
+    applyDocumentSharePreview(sharePreview);
+  }, [post, sharePreview]);
 
   const resetMobileCommentSheetDrag = useCallback(() => {
     dragStartYRef.current = null;
@@ -340,14 +356,14 @@ export default function PostDetailPage() {
     try {
       if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
         await navigator.share({
-          title: post.title,
-          text: postSummary,
-          url: window.location.href,
+          title: sharePreview.title,
+          text: sharePreview.description,
+          url: sharePreview.canonicalUrl,
         });
         return;
       }
 
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(sharePreview.canonicalUrl);
       success('게시글 링크를 복사했습니다.');
     } catch {
       error('공유에 실패했습니다. 잠시 후 다시 시도해 주세요.');
@@ -568,7 +584,7 @@ export default function PostDetailPage() {
                 variant='ghost'
                 className='w-full justify-center text-slate-500 sm:w-auto sm:px-2.5 dark:text-slate-300'
                 onClick={() => {
-                  void navigator.clipboard.writeText(window.location.href).then(() => {
+                  void navigator.clipboard.writeText(sharePreview.canonicalUrl).then(() => {
                     success('게시글 링크를 복사했습니다.');
                   }).catch(() => {
                     error('링크 복사에 실패했습니다.');
