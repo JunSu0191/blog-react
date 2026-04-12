@@ -27,7 +27,7 @@ const DEFAULT_SHARE_DESCRIPTION =
   "요약 문구나 본문 첫 문단이 링크 공유 미리보기에 반영됩니다.";
 const DEFAULT_CATEGORY_LABEL = "미분류";
 const DEFAULT_READ_TIME_LABEL = "1분 읽기";
-const DEFAULT_OG_IMAGE_PATH = "/default-post.png";
+const DEFAULT_OG_IMAGE_PATH = "/og/default-post.png";
 
 function normalizeText(value?: string) {
   if (typeof value !== "string") return "";
