@@ -2,9 +2,10 @@ import { Globe, MapPin } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuthContext } from "@/shared/context/useAuthContext";
 import type { ApiError } from "@/shared/lib/api";
 import { resolveDisplayName } from "@/shared/lib/displayName";
-import { Button, Input, Select } from "@/shared/ui";
+import { Button, Input, Select, UserAvatar } from "@/shared/ui";
 import PostFeedListItem, {
   type FeedPostCardData,
 } from "@/features/post/components/feed/PostFeedListItem";
@@ -123,6 +124,7 @@ function getThemePresetLabel(themePreset: BlogThemePreset) {
 export default function BlogProfilePage() {
   const { username: rawUsername } = useParams();
   const username = (rawUsername ?? "").trim();
+  const { user } = useAuthContext();
   const isMobile = useIsMobile();
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -267,7 +269,6 @@ export default function BlogProfilePage() {
     "Unknown",
   );
 
-  const avatarInitial = profileName.slice(0, 1).toUpperCase();
   const themePreset = normalizeThemePreset(profileData.blogSettings.themePreset);
   const profileLayout = normalizeProfileLayout(profileData.blogSettings.profileLayout);
   const fontScale = normalizeFontScale(profileData.blogSettings.fontScale);
@@ -288,6 +289,8 @@ export default function BlogProfilePage() {
     nickname: profileData.user.nickname,
     profileImageUrl: profileData.profile.avatarUrl,
   };
+  const isOwnBlog =
+    user?.username?.trim().toLowerCase() === profileData.user.username.trim().toLowerCase();
 
   return (
     <div className={`route-enter space-y-4 pt-2 sm:pt-0 ${pageScaleClass}`} style={pageStyle}>
@@ -307,62 +310,59 @@ export default function BlogProfilePage() {
         >
           <div
             className={[
-              "flex min-w-0 items-start gap-3",
-              isCenteredLayout ? "flex-col items-center" : "",
+              "flex min-w-0 gap-4",
+              isCenteredLayout ? "flex-col items-center" : "items-start",
             ].join(" ")}
           >
-            {profileData.profile.avatarUrl ? (
-              <img
-                src={profileData.profile.avatarUrl}
-                alt={`${profileName} 아바타`}
-                className={[
-                  "shrink-0 rounded-full border-2 border-white object-cover shadow-sm dark:border-slate-700",
-                  isCompactLayout ? "h-14 w-14" : "h-16 w-16",
-                ].join(" ")}
-              />
-            ) : (
-              <div
-                className={[
-                  "inline-flex shrink-0 items-center justify-center rounded-full text-white shadow-sm",
-                  isCompactLayout ? "h-14 w-14 text-lg" : "h-16 w-16 text-xl",
-                ].join(" ")}
-                style={{ backgroundColor: "var(--blog-accent)" }}
-              >
-                {avatarInitial}
-              </div>
-            )}
+            <UserAvatar
+              name={profileName}
+              imageUrl={profileData.profile.avatarUrl}
+              alt={`${profileName} 아바타`}
+              className={[
+                "shrink-0 border-2 border-white shadow-sm dark:border-slate-700",
+                isCompactLayout ? "h-14 w-14" : "h-16 w-16",
+              ].join(" ")}
+              fallbackClassName={isCompactLayout ? "text-lg font-black" : "text-xl font-black"}
+            />
 
-            <div className={isCenteredLayout ? "text-center" : "min-w-0"}>
+            <div
+              className={[
+                "min-w-0",
+                isCenteredLayout ? "text-center" : "space-y-3",
+              ].join(" ")}
+            >
               <h1
                 className={["line-clamp-1 font-black", isCompactLayout ? "text-lg" : "text-xl"].join(" ")}
                 style={{ color: "var(--blog-accent)" }}
               >
                 {profileName}
               </h1>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
                 아이디 {profileData.user.username}
               </p>
 
-              <div className="mt-2">
-                <span
-                  className={[
-                    "inline-flex rounded-full px-2 py-1 text-[11px] font-semibold",
-                    themeClass.badge,
-                  ].join(" ")}
-                >
-                  테마 · {getThemePresetLabel(themePreset)}
-                </span>
-              </div>
+              {isOwnBlog ? (
+                <div>
+                  <span
+                    className={[
+                      "inline-flex rounded-full px-2 py-1 text-[11px] font-semibold",
+                      themeClass.badge,
+                    ].join(" ")}
+                  >
+                    테마 · {getThemePresetLabel(themePreset)}
+                  </span>
+                </div>
+              ) : null}
 
               {profileData.profile.bio ? (
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300">
+                <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300">
                   {profileData.profile.bio}
                 </p>
               ) : null}
 
               <div
                 className={[
-                  "mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400",
+                  "flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400",
                   isCenteredLayout ? "justify-center" : "",
                 ].join(" ")}
               >

@@ -27,6 +27,7 @@ export interface CommentResponse {
   nickname?: string;
   displayName?: string;
   username?: string;
+  avatarUrl?: string;
   parentId: number | null;
   content: string;
   createdAt: string;
@@ -126,6 +127,28 @@ function normalizeCommentResponse(raw: unknown): CommentResponse {
     nickname,
     displayName,
     username,
+    avatarUrl: pickText(
+      typeof obj.avatarUrl === "string" ? obj.avatarUrl : undefined,
+      typeof obj.avatar_url === "string" ? obj.avatar_url : undefined,
+      typeof obj.profileImageUrl === "string" ? obj.profileImageUrl : undefined,
+      typeof obj.profile_image_url === "string" ? obj.profile_image_url : undefined,
+      typeof nestedUser?.avatarUrl === "string" ? nestedUser.avatarUrl : undefined,
+      typeof nestedUser?.avatar_url === "string" ? nestedUser.avatar_url : undefined,
+      typeof nestedUser?.profileImageUrl === "string"
+        ? nestedUser.profileImageUrl
+        : undefined,
+      typeof nestedUser?.profile_image_url === "string"
+        ? nestedUser.profile_image_url
+        : undefined,
+      typeof nestedProfile?.avatarUrl === "string" ? nestedProfile.avatarUrl : undefined,
+      typeof nestedProfile?.avatar_url === "string" ? nestedProfile.avatar_url : undefined,
+      typeof nestedProfile?.profileImageUrl === "string"
+        ? nestedProfile.profileImageUrl
+        : undefined,
+      typeof nestedProfile?.profile_image_url === "string"
+        ? nestedProfile.profile_image_url
+        : undefined,
+    ),
     parentId:
       typeof toFiniteNumber(obj.parentId) === "number"
         ? (toFiniteNumber(obj.parentId) as number)

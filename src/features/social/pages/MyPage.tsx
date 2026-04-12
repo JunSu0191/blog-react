@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
-import { Globe, MapPin, PencilLine, UserRound } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Globe, ImagePlus, MapPin, PencilLine, Trash2, UserRound } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuthContext } from "@/shared/context/useAuthContext";
 import {
@@ -9,9 +9,12 @@ import {
   SegmentedControl,
   StatCard,
   SurfaceCard,
+  UserAvatar,
 } from "@/shared/ui";
+import { useTusUpload } from "@/shared/hooks/useTusUpload";
 import { resolveDisplayName } from "@/shared/lib/displayName";
 import { showErrorToast } from "@/shared/lib/errorToast";
+import { useToast } from "@/shared/ui/ToastProvider";
 import { Badge } from "@/components/ui";
 import { useBookmarkedPosts } from "@/features/post/queries";
 import { readBookmarkedPostIds } from "@/features/post/utils/bookmarkStorage";
@@ -19,6 +22,8 @@ import { useMyPage } from "../hooks/useMyPage";
 import type { MyPageProfileUpdateRequest } from "../types";
 
 type ActiveTab = "overview" | "posts" | "comments" | "saved" | "settings";
+const AVATAR_MAX_FILE_SIZE = 5 * 1024 * 1024;
+const AVATAR_ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 function formatDate(raw?: string) {
   if (!raw) return "날짜 없음";
@@ -47,7 +52,9 @@ function toPlainText(content?: string) {
 
 export default function MyPage() {
   const isMobile = useIsMobile();
-  const { updateUser } = useAuthContext();
+  const { token, refreshUser, updateUser } = useAuthContext();
+  const { success } = useToast();
+  const { upload, isUploading: isUploadingAvatar } = useTusUpload();
   const {
     summary,
     posts,
@@ -61,6 +68,7 @@ export default function MyPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
   const [bookmarkedPostIds, setBookmarkedPostIds] = useState<number[]>([]);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState<MyPageProfileUpdateRequest>({
     name: "",
     nickname: "",
@@ -70,6 +78,9 @@ export default function MyPage() {
     websiteUrl: "",
     location: "",
   });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarInputError, setAvatarInputError] = useState<string | null>(null);
   const visibleDisplayName = useMemo(() => {
     if (!summary) return "U";
     return resolveDisplayName(
@@ -83,7 +94,18 @@ export default function MyPage() {
     );
   }, [summary]);
   const avatarLabel = visibleDisplayName;
+  const displayedAvatarUrl = isEditingProfile
+    ? avatarPreviewUrl || profileForm.avatarUrl || ""
+    : summary?.profile.avatarUrl || "";
   const bookmarkedPostsQuery = useBookmarkedPosts(bookmarkedPostIds);
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(avatarPreviewUrl);
+      }
+    };
+  }, [avatarPreviewUrl]);
 
   useEffect(() => {
     if (!summary || isEditingProfile) return;
@@ -125,6 +147,62 @@ export default function MyPage() {
     }));
   };
 
+  const buildAuthHeaders = () => {
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
+  const resetAvatarDraft = () => {
+    setAvatarFile(null);
+    setAvatarInputError(null);
+    setAvatarPreviewUrl((previous) => {
+      if (previous?.startsWith("blob:")) {
+        URL.revokeObjectURL(previous);
+      }
+      return null;
+    });
+  };
+
+  const validateAvatarFile = (file: File) => {
+    if (!AVATAR_ACCEPTED_TYPES.includes(file.type)) {
+      return "JPG, PNG, WebP 이미지만 업로드할 수 있습니다.";
+    }
+    if (file.size > AVATAR_MAX_FILE_SIZE) {
+      return "아바타 이미지는 5MB 이하만 업로드할 수 있습니다.";
+    }
+    return null;
+  };
+
+  const handleAvatarFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextFile = event.target.files?.[0];
+    event.target.value = "";
+    if (!nextFile) return;
+
+    const validationError = validateAvatarFile(nextFile);
+    if (validationError) {
+      setAvatarInputError(validationError);
+      return;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(nextFile);
+    setAvatarFile(nextFile);
+    setAvatarInputError(null);
+    setAvatarPreviewUrl((previous) => {
+      if (previous?.startsWith("blob:")) {
+        URL.revokeObjectURL(previous);
+      }
+      return nextPreviewUrl;
+    });
+  };
+
+  const handleRemoveAvatar = () => {
+    resetAvatarDraft();
+    handleProfileFieldChange("avatarUrl", "");
+  };
+
   const handleSaveProfile = async () => {
     if (!summary) return;
 
@@ -135,20 +213,36 @@ export default function MyPage() {
     }
 
     try {
+      const nextAvatarUrl = avatarFile
+        ? await upload(avatarFile, { headers: buildAuthHeaders() })
+        : profileForm.avatarUrl?.trim() || null;
+
       await updateProfile({
         name: summary.name,
         nickname: trimmedNickname,
         displayName: trimmedNickname,
         bio: profileForm.bio?.trim() || null,
-        avatarUrl: profileForm.avatarUrl?.trim() || null,
+        avatarUrl: nextAvatarUrl,
         websiteUrl: profileForm.websiteUrl?.trim() || null,
         location: profileForm.location?.trim() || null,
       });
+      try {
+        await refreshUser();
+      } catch {
+        // 세션 동기화 실패 시 로컬 상태라도 최신값으로 맞춘다.
+      }
       updateUser({
         nickname: trimmedNickname,
         displayName: trimmedNickname,
+        avatarUrl: nextAvatarUrl ?? "",
       });
+      resetAvatarDraft();
+      setProfileForm((previous) => ({
+        ...previous,
+        avatarUrl: nextAvatarUrl || "",
+      }));
       setIsEditingProfile(false);
+      success("프로필을 저장했습니다.");
     } catch {
       // 에러 토스트는 hook 레벨에서 처리.
     }
@@ -165,6 +259,7 @@ export default function MyPage() {
       websiteUrl: summary.profile.websiteUrl || "",
       location: summary.profile.location || "",
     });
+    resetAvatarDraft();
     setIsEditingProfile(false);
   };
 
@@ -191,19 +286,15 @@ export default function MyPage() {
     <div className="route-enter space-y-4 sm:space-y-5">
       <SurfaceCard className="rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="flex min-w-0 items-center gap-4">
-            {summary.profile.avatarUrl ? (
-              <img
-                src={summary.profile.avatarUrl}
-                alt={`${avatarLabel} 아바타`}
-                className="h-14 w-14 shrink-0 rounded-2xl border border-slate-200 object-cover dark:border-slate-700"
-              />
-            ) : (
-              <div className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-lg font-black text-white">
-                {avatarLabel.slice(0, 1).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0">
+          <div className="flex min-w-0 items-start gap-4">
+            <UserAvatar
+              name={avatarLabel}
+              imageUrl={displayedAvatarUrl}
+              alt={`${avatarLabel} 아바타`}
+              className="h-14 w-14 border border-slate-200 dark:border-slate-700"
+              fallbackClassName="text-lg font-black"
+            />
+            <div className="min-w-0 pt-0.5">
               <p className="line-clamp-1 text-xl font-black text-slate-900 dark:text-slate-100">
                 {visibleDisplayName}
               </p>
@@ -277,7 +368,7 @@ export default function MyPage() {
                 onClick={() => {
                   void handleSaveProfile();
                 }}
-                isLoading={isUpdatingProfile}
+                isLoading={isUpdatingProfile || isUploadingAvatar}
                 loadingText="저장 중..."
                 className="rounded-xl bg-blue-600 text-white hover:bg-blue-700"
               >
@@ -289,19 +380,74 @@ export default function MyPage() {
 
         {isEditingProfile && (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <UserAvatar
+                    name={profileForm.nickname || visibleDisplayName}
+                    imageUrl={avatarPreviewUrl || profileForm.avatarUrl || undefined}
+                    alt={`${avatarLabel} 아바타 미리보기`}
+                    className="h-20 w-20 border border-slate-200 dark:border-slate-700"
+                    fallbackClassName="text-2xl font-black"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+                      프로필 아바타
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                      업로드한 이미지는 원형 아바타로 표시됩니다. JPG, PNG, WebP / 최대 5MB까지 업로드할 수 있습니다.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={AVATAR_ACCEPTED_TYPES.join(",")}
+                        className="hidden"
+                        onChange={handleAvatarFileChange}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUpdatingProfile || isUploadingAvatar}
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        사진 업로드
+                      </Button>
+                      {(avatarPreviewUrl || profileForm.avatarUrl) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-900/60 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                          onClick={handleRemoveAvatar}
+                          disabled={isUpdatingProfile || isUploadingAvatar}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          아바타 제거
+                        </Button>
+                      )}
+                    </div>
+                    {avatarFile ? (
+                      <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        선택한 파일: {avatarFile.name}
+                      </p>
+                    ) : null}
+                    {avatarInputError ? (
+                      <p className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                        {avatarInputError}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
             <Input
               value={profileForm.nickname ?? ""}
               onChange={(event) =>
                 handleProfileFieldChange("nickname", event.target.value)
               }
               placeholder="닉네임"
-            />
-            <Input
-              value={profileForm.avatarUrl ?? ""}
-              onChange={(event) =>
-                handleProfileFieldChange("avatarUrl", event.target.value)
-              }
-              placeholder="아바타 URL"
             />
             <Input
               value={profileForm.websiteUrl ?? ""}

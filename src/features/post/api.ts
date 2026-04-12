@@ -621,7 +621,15 @@ function normalizeSummary(raw: unknown): PostSummary {
             name: toText(authorRecord?.name) || toText(record.authorName),
             nickname:
               toText(authorRecord?.nickname) || toText(record.authorNickname),
-            profileImageUrl: toText(authorRecord?.profileImageUrl),
+            profileImageUrl:
+              toText(authorRecord?.profileImageUrl) ||
+              toText(authorRecord?.profile_image_url) ||
+              toText(authorRecord?.avatarUrl) ||
+              toText(authorRecord?.avatar_url) ||
+              toText(record.authorProfileImageUrl) ||
+              toText(record.author_profile_image_url) ||
+              toText(record.authorAvatarUrl) ||
+              toText(record.author_avatar_url),
           }
         : null,
     series,

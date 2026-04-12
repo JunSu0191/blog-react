@@ -26,6 +26,7 @@ export type AuthUser = {
   name: string;
   nickname?: string;
   displayName?: string;
+  avatarUrl?: string;
   email?: string;
   authProvider?: string;
   signupCompleted?: boolean;
@@ -168,6 +169,19 @@ function normalizeAuthUser(raw: unknown): AuthUser | undefined {
     name,
     nickname,
     displayName,
+    avatarUrl:
+      toText(obj.avatarUrl) ??
+      toText(obj.avatar_url) ??
+      toText(obj.profileImageUrl) ??
+      toText(obj.profile_image_url) ??
+      toText(nestedUser?.avatarUrl) ??
+      toText(nestedUser?.avatar_url) ??
+      toText(nestedUser?.profileImageUrl) ??
+      toText(nestedUser?.profile_image_url) ??
+      toText(profile?.avatarUrl) ??
+      toText(profile?.avatar_url) ??
+      toText(profile?.profileImageUrl) ??
+      toText(profile?.profile_image_url),
     email:
       toText(obj.email) ??
       toText(nestedUser?.email) ??

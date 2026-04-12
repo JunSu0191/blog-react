@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Carousel,
   type CarouselApi,
@@ -8,7 +7,7 @@ import {
   CarouselItem,
 } from "@/components/ui/carousel";
 import { resolveDisplayName } from "@/shared/lib/displayName";
-import { TagChip } from "@/shared/ui";
+import { TagChip, UserAvatar } from "@/shared/ui";
 import { resolveSeriesPath } from "../../utils/postContent";
 
 export type FeedPostCardData = {
@@ -99,11 +98,6 @@ function resolveAuthorProfilePath(post: FeedPostCardData) {
   const username = post.author?.username?.trim();
   if (username) return `/${encodeURIComponent(username)}`;
   return null;
-}
-
-function resolveAuthorInitial(name: string) {
-  const first = name.trim().charAt(0);
-  return first || "익";
 }
 
 function resolvePostImages(post: FeedPostCardData) {
@@ -297,15 +291,13 @@ export default function PostFeedListItem({
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2.5">
-              <Avatar className="h-9 w-9 border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
-                <AvatarImage
-                  src={post.author?.profileImageUrl}
-                  alt={`${authorName} 프로필`}
-                />
-                <AvatarFallback className="bg-blue-100 text-sm font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
-                  {resolveAuthorInitial(authorName)}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar
+                name={authorName}
+                imageUrl={post.author?.profileImageUrl}
+                alt={`${authorName} 프로필`}
+                className="h-9 w-9 border border-slate-200 dark:border-slate-700"
+                fallbackClassName="text-sm font-bold"
+              />
 
               <div className="min-w-0">
                 {authorBlogPath ? (

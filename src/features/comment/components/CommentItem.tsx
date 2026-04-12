@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui";
-import { ActionDialog, Button } from "@/shared/ui";
+import { ActionDialog, Button, UserAvatar } from "@/shared/ui";
 import useActionDialog from "@/shared/hooks/useActionDialog";
 import { useAuthContext } from "@/shared/context/useAuthContext";
 import { isUnauthorizedError } from "@/shared/lib/api";
@@ -275,14 +275,13 @@ export default function CommentItem({
     <div className={["py-3 sm:py-4", isReply ? "pl-1" : ""].join(" ")}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex items-start gap-2.5 sm:gap-3">
-          <span
-            className={[
-              "inline-flex items-center justify-center rounded-full bg-slate-200 font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-100",
-              isReply ? "h-8 w-8 text-xs" : "h-9 w-9 text-sm",
-            ].join(" ")}
-          >
-            {authorName.slice(0, 1).toUpperCase()}
-          </span>
+          <UserAvatar
+            name={authorName}
+            imageUrl={comment.avatarUrl}
+            alt={`${authorName} 아바타`}
+            className={isReply ? "h-8 w-8 text-xs" : "h-9 w-9 text-sm"}
+            fallbackClassName="text-inherit font-bold"
+          />
           <div className="min-w-0">
             {authorBlogPath ? (
               <Link

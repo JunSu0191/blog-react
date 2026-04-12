@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
 import { Bookmark, BookmarkCheck, ChevronDown, Link2, MessageCircle, Send, Trash2, X } from 'lucide-react';
-import { ActionDialog, Button, TagChip } from '@/shared/ui';
+import { ActionDialog, Button, TagChip, UserAvatar } from '@/shared/ui';
 import { useAuthContext } from '@/shared/context/useAuthContext';
 import { useBodyScrollLock, useMobileVisualViewportHeight } from '@/shared/hooks/useMobileOverlay';
 import { resolveDisplayName } from '@/shared/lib/displayName';
@@ -514,10 +514,13 @@ export default function PostDetailPage() {
           <div
             className='mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3 dark:border-slate-700 dark:bg-slate-800/40 sm:flex-row sm:items-center sm:justify-between sm:py-2.5'>
             <div className='flex min-w-0 items-center gap-2'>
-              <span
-                className='flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-200'>
-                {authorName.slice(0, 1)}
-              </span>
+              <UserAvatar
+                name={authorName}
+                imageUrl={post.author?.profileImageUrl}
+                alt={`${authorName} 아바타`}
+                className='h-8 w-8'
+                fallbackClassName='text-xs font-bold'
+              />
               <div className='min-w-0'>
                 <p className='truncate text-xs text-slate-500 dark:text-slate-400'>
                   작성자
@@ -778,7 +781,7 @@ export default function PostDetailPage() {
 	              </section>
 	            )}
 
-              <section className='mt-10 border-t border-slate-200 pt-6 dark:border-slate-700'>
+              <section className='mt-10 border-t border-slate-200 pt-6 dark:border-slate-700 lg:mt-0'>
                 <h2 className='text-xl font-black text-slate-900 dark:text-slate-100'>
                   관련 글
                 </h2>
