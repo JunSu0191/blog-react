@@ -285,6 +285,16 @@ function normalizeUser(raw: unknown): ChatUserSummary | null {
       trimText(toText(obj.displayName)) ||
       trimText(toText(nestedUser?.nickname)) ||
       trimText(toText(nestedUser?.displayName)),
+    avatarUrl:
+      trimText(toText(obj.avatarUrl)) ||
+      trimText(toText(obj.avatar_url)) ||
+      trimText(toText(obj.profileImageUrl)) ||
+      trimText(toText(obj.profile_image_url)) ||
+      trimText(toText(obj.imageUrl)) ||
+      trimText(toText(nestedUser?.avatarUrl)) ||
+      trimText(toText(nestedUser?.avatar_url)) ||
+      trimText(toText(nestedUser?.profileImageUrl)) ||
+      trimText(toText(nestedUser?.profile_image_url)),
   };
 }
 
@@ -404,6 +414,13 @@ function normalizeThread(raw: unknown, fallbackType?: ChatThreadType): ChatThrea
     title: normalizedTitle,
     displayTitle: normalizedDisplayTitle || normalizedTitle || "이름 없는 대화방",
     type,
+    avatarUrl:
+      trimText(toText(obj.avatarUrl)) ||
+      trimText(toText(obj.avatar_url)) ||
+      trimText(toText(obj.otherUserAvatarUrl)) ||
+      trimText(toText(obj.other_user_avatar_url)) ||
+      trimText(toText(obj.profileImageUrl)) ||
+      trimText(toText(obj.profile_image_url)),
     lastMessage: normalizeConversationLastMessage(obj),
     unreadMessageCount,
     unreadCount: unreadMessageCount,
@@ -498,6 +515,13 @@ function normalizeFriendRequest(
       obj.fromDisplayName ??
       obj.requesterNickname ??
       obj.fromNickname,
+    avatarUrl:
+      requesterBase.avatarUrl ??
+      requesterBase.profileImageUrl ??
+      obj.requesterAvatarUrl ??
+      obj.requesterProfileImageUrl ??
+      obj.fromAvatarUrl ??
+      obj.fromProfileImageUrl,
   };
 
   const targetBase =
@@ -544,6 +568,15 @@ function normalizeFriendRequest(
       obj.targetNickname ??
       obj.toNickname ??
       obj.friendNickname,
+    avatarUrl:
+      targetBase.avatarUrl ??
+      targetBase.profileImageUrl ??
+      obj.targetAvatarUrl ??
+      obj.targetProfileImageUrl ??
+      obj.toAvatarUrl ??
+      obj.toProfileImageUrl ??
+      obj.friendAvatarUrl ??
+      obj.friendProfileImageUrl,
   };
 
   const requester = normalizeUser(requesterCandidate);
@@ -585,6 +618,11 @@ function normalizeGroupInvite(raw: unknown): GroupInvite | null {
       userId: toFiniteNumber(obj.inviterUserId) ?? toFiniteNumber(obj.senderId),
       username: obj.inviterUsername ?? obj.senderUsername,
       name: obj.inviterName ?? obj.senderName,
+      avatarUrl:
+        obj.inviterAvatarUrl ??
+        obj.inviterProfileImageUrl ??
+        obj.senderAvatarUrl ??
+        obj.senderProfileImageUrl,
     });
 
   if (!inviter) return null;
@@ -652,6 +690,17 @@ function normalizeMessage(conversationId: number, raw: unknown): ChatMessage | n
       (obj.name as string | undefined) ||
       (sender?.nickname as string | undefined) ||
       (sender?.name as string | undefined),
+    senderAvatarUrl:
+      (obj.senderAvatarUrl as string | undefined) ||
+      (obj.sender_avatar_url as string | undefined) ||
+      (obj.avatarUrl as string | undefined) ||
+      (obj.avatar_url as string | undefined) ||
+      (obj.profileImageUrl as string | undefined) ||
+      (obj.profile_image_url as string | undefined) ||
+      (sender?.avatarUrl as string | undefined) ||
+      (sender?.avatar_url as string | undefined) ||
+      (sender?.profileImageUrl as string | undefined) ||
+      (sender?.profile_image_url as string | undefined),
     content,
     createdAt:
       (obj.createdAt as string | undefined) ||

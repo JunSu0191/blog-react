@@ -201,7 +201,9 @@ export default function NotificationList({
                     <p className="mt-1 line-clamp-2 text-xs text-slate-600 dark:text-slate-300">{content.body}</p>
                   </div>
                   {!item.isRead && (
-                    <span className="mt-0.5 h-2.5 w-2.5 rounded-full bg-blue-600" />
+                    <span className="mt-0.5 flex-none self-start">
+                      <span className="block h-2.5 w-2.5 min-h-2.5 min-w-2.5 shrink-0 rounded-full bg-blue-600 [aspect-ratio:1/1]" />
+                    </span>
                   )}
                 </div>
                 <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{formatDateTime(item.createdAt)}</p>

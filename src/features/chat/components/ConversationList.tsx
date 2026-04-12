@@ -1,3 +1,4 @@
+import { UserAvatar } from "@/shared/ui";
 import { BellOff, MoreHorizontal, Pin } from "lucide-react";
 import {
   ContextMenu,
@@ -19,6 +20,7 @@ import {
 type ConversationListProps = {
   conversations: ChatConversation[];
   selectedConversationId?: number;
+  currentUserId?: number;
   onSelect: (conversationId: number) => void;
   onRequestLeaveGroup?: (threadId: number) => void;
   onRequestHideThread?: (threadId: number) => void;
@@ -28,6 +30,7 @@ type ConversationListProps = {
   clearingThreadId?: number;
   isLoading?: boolean;
   searchKeyword?: string;
+  userAvatarUrls?: Record<number, string | undefined>;
   resurfacedThreadIds?: Set<number>;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -77,6 +80,7 @@ function isGroupConversation(conversation: ChatConversation) {
 export default function ConversationList({
   conversations,
   selectedConversationId,
+  currentUserId,
   onSelect,
   onRequestLeaveGroup,
   onRequestHideThread,
@@ -86,6 +90,7 @@ export default function ConversationList({
   clearingThreadId,
   isLoading,
   searchKeyword = "",
+  userAvatarUrls,
   resurfacedThreadIds,
   emptyTitle = "대화방이 없습니다.",
   emptyDescription = "새 대화를 시작하면 여기에 최근 대화가 정리됩니다.",
@@ -142,6 +147,14 @@ export default function ConversationList({
         const hasUnread = Boolean(unreadCountText);
         const previewText =
           conversation.lastMessage?.trim() || "대화를 시작해보세요.";
+        const otherParticipantId = isDirectConversation(conversation)
+          ? conversation.participantUserIds?.find((userId) => userId !== currentUserId)
+          : undefined;
+        const avatarUrl =
+          conversation.avatarUrl ||
+          (typeof otherParticipantId === "number"
+            ? userAvatarUrls?.[otherParticipantId]
+            : undefined);
 
         return (
           <ContextMenu key={conversation.id}>
@@ -161,18 +174,13 @@ export default function ConversationList({
                   onClick={() => onSelect(conversation.id)}
                   className="touch-manipulation flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-[transform,background-color] duration-150 ease-out motion-safe:active:translate-y-[1px] motion-safe:active:scale-[0.985]"
                 >
-                  <span
-                    className={[
-                      "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-black",
-                      isActive
-                        ? "bg-blue-600 text-white"
-                        : hasUnread
-                          ? "bg-blue-100 text-blue-700 dark:bg-blue-950/45 dark:text-blue-300"
-                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-                    ].join(" ")}
-                  >
-                    {displayMeta.initial}
-                  </span>
+                  <UserAvatar
+                    name={displayMeta.title}
+                    imageUrl={avatarUrl}
+                    alt={`${displayMeta.title} 아바타`}
+                    className="h-10 w-10"
+                    fallbackClassName="text-xs font-black"
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex min-w-0 items-center gap-1.5">

@@ -12,6 +12,7 @@ export type ChatUserSummary = {
   username?: string;
   name?: string;
   nickname?: string;
+  avatarUrl?: string;
 };
 
 export type Friend = ChatUserSummary & {
@@ -34,6 +35,7 @@ export type ChatThread = {
   type: ChatThreadType;
   title?: string | null;
   displayTitle: string;
+  avatarUrl?: string;
   lastMessage?: string;
   unreadMessageCount: number;
   // Backward compatibility for existing UI paths.
@@ -57,6 +59,7 @@ export type ChatMessage = {
   conversationId: number;
   senderId?: number;
   senderName?: string;
+  senderAvatarUrl?: string;
   content: string;
   createdAt?: string;
   clientMsgId?: string;

@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui";
-import { ActionDialog, Button } from "@/shared/ui";
+import { ActionDialog, Button, UserAvatar } from "@/shared/ui";
 import type { ChatRoomBaseProps } from "./useChatRoomController";
 import { useChatRoomController } from "./useChatRoomController";
 
@@ -21,8 +21,10 @@ export default function DesktopChatRoom({
   conversationId,
   currentUserId,
   conversationTitle,
+  conversationAvatarUrl,
   conversationType,
   userDisplayNames,
+  userAvatarUrls,
   onRequestLeaveGroup,
   onRequestHideThread,
   onRequestClearMyMessages,
@@ -72,9 +74,13 @@ export default function DesktopChatRoom({
       <div className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">
-              {(conversationTitle || "이름 없는 대화방").slice(0, 1)}
-            </span>
+            <UserAvatar
+              name={conversationTitle || "이름 없는 대화방"}
+              imageUrl={conversationAvatarUrl}
+              alt={`${conversationTitle || "이름 없는 대화방"} 아바타`}
+              className="h-9 w-9"
+              fallbackClassName="text-xs font-black"
+            />
             <div className="min-w-0">
               <p className="line-clamp-1 text-sm font-bold text-slate-900 dark:text-slate-100">
                 {conversationTitle || "이름 없는 대화방"}
@@ -179,43 +185,73 @@ export default function DesktopChatRoom({
           const senderLabel = isMine
             ? "나"
             : senderDisplayName || senderMappedName || "알 수 없음";
+          const senderAvatarUrl =
+            message.senderAvatarUrl ||
+            (typeof message.senderId === "number"
+              ? userAvatarUrls?.[message.senderId]
+              : undefined);
 
           return (
             <div
               key={message.localId}
-              className={[
-                "max-w-[92%] rounded-2xl border px-3 py-2 sm:max-w-[78%]",
-                isMine
-                  ? "ml-auto border-blue-200 bg-blue-50/90 shadow-[0_1px_2px_rgba(37,99,235,0.1)] dark:border-blue-700/60 dark:bg-blue-950/35"
-                  : "mr-auto border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900",
-              ].join(" ")}
+              className={cn(
+                "flex items-end gap-2",
+                isMine ? "justify-end" : "justify-start",
+              )}
             >
-              <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-slate-400 dark:text-slate-500">
-                <span className="line-clamp-1 font-semibold text-slate-500 dark:text-slate-300">
-                  {senderLabel}
-                </span>
-                <span>
-                  {message.createdAt
-                    ? new Date(message.createdAt).toLocaleTimeString("ko-KR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : ""}
-                </span>
+              {!isMine ? (
+                <UserAvatar
+                  name={senderLabel}
+                  imageUrl={senderAvatarUrl}
+                  alt={`${senderLabel} 아바타`}
+                  className="h-9 w-9"
+                  fallbackClassName="text-xs font-black"
+                />
+              ) : null}
+              <div
+                className={[
+                  "max-w-[92%] rounded-2xl border px-3 py-2 sm:max-w-[78%]",
+                  isMine
+                    ? "border-blue-200 bg-blue-50/90 shadow-[0_1px_2px_rgba(37,99,235,0.1)] dark:border-blue-700/60 dark:bg-blue-950/35"
+                    : "border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900",
+                ].join(" ")}
+              >
+                <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+                  <span className="line-clamp-1 font-semibold text-slate-500 dark:text-slate-300">
+                    {senderLabel}
+                  </span>
+                  <span>
+                    {message.createdAt
+                      ? new Date(message.createdAt).toLocaleTimeString("ko-KR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : ""}
+                  </span>
+                </div>
+                <p className="whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-100">
+                  {message.content}
+                </p>
+                {message.status === "sending" && (
+                  <p className="mt-1 text-[11px] font-semibold text-blue-600">
+                    전송 중...
+                  </p>
+                )}
+                {message.status === "failed" && (
+                  <p className="mt-1 text-[11px] font-semibold text-rose-600">
+                    전송 실패
+                  </p>
+                )}
               </div>
-              <p className="whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-100">
-                {message.content}
-              </p>
-              {message.status === "sending" && (
-                <p className="mt-1 text-[11px] font-semibold text-blue-600">
-                  전송 중...
-                </p>
-              )}
-              {message.status === "failed" && (
-                <p className="mt-1 text-[11px] font-semibold text-rose-600">
-                  전송 실패
-                </p>
-              )}
+              {isMine ? (
+                <UserAvatar
+                  name={senderLabel}
+                  imageUrl={senderAvatarUrl}
+                  alt={`${senderLabel} 아바타`}
+                  className="h-9 w-9"
+                  fallbackClassName="text-xs font-black"
+                />
+              ) : null}
             </div>
           );
         })}

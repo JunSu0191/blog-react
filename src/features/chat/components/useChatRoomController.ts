@@ -19,8 +19,10 @@ export type ChatRoomBaseProps = {
   conversationId: number;
   currentUserId?: number;
   conversationTitle?: string;
+  conversationAvatarUrl?: string;
   conversationType?: ChatConversation["type"];
   userDisplayNames?: Record<number, string>;
+  userAvatarUrls?: Record<number, string | undefined>;
   onBack?: () => void;
   onRequestLeaveGroup?: (threadId: number) => void;
   onRequestHideThread?: (threadId: number) => void;

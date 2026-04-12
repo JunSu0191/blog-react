@@ -65,6 +65,7 @@ type ChatUserLike = {
   username?: string;
   name?: string;
   nickname?: string;
+  avatarUrl?: string;
 };
 
 type InlineActionErrors = Record<string, string>;
@@ -459,6 +460,54 @@ export default function ChatPage() {
       return acc;
     }, {});
   }, [chatUsers]);
+  const userAvatarUrls = useMemo(() => {
+    const avatarMap: Record<number, string | undefined> = {};
+    const register = (candidate?: ChatUserLike | null) => {
+      if (!candidate || typeof candidate.userId !== "number") return;
+      const avatarUrl = candidate.avatarUrl?.trim();
+      if (avatarUrl) {
+        avatarMap[candidate.userId] = avatarUrl;
+      }
+    };
+
+    register(
+      typeof currentUserId === "number"
+        ? { userId: currentUserId, avatarUrl: user?.avatarUrl }
+        : null,
+    );
+    chatUsers.forEach(register);
+    friends.forEach(register);
+    receivedRequests.forEach((request) => {
+      register(request.requester);
+      register(request.target);
+    });
+    sentRequests.forEach((request) => {
+      register(request.requester);
+      register(request.target);
+    });
+    pendingInvites.forEach((invite) => register(invite.inviter));
+
+    return avatarMap;
+  }, [
+    chatUsers,
+    currentUserId,
+    friends,
+    pendingInvites,
+    receivedRequests,
+    sentRequests,
+    user?.avatarUrl,
+  ]);
+  const selectedThreadAvatarUrl = useMemo(() => {
+    if (!selectedThread) return undefined;
+    if (selectedThread.avatarUrl?.trim()) return selectedThread.avatarUrl.trim();
+    if (selectedThread.type !== CHAT_THREAD_TYPE.DIRECT) return undefined;
+
+    const otherParticipantId = selectedThread.participantUserIds?.find(
+      (participantId) => participantId !== currentUserId,
+    );
+    if (typeof otherParticipantId !== "number") return undefined;
+    return userAvatarUrls[otherParticipantId];
+  }, [currentUserId, selectedThread, userAvatarUrls]);
 
   const hideTargetThreadTitle = extractThreadTitle(hideTargetThread);
   const leaveTargetThreadTitle = extractThreadTitle(leaveTargetThread);
@@ -1327,7 +1376,9 @@ export default function ChatPage() {
         <ConversationList
           conversations={visibleDirectThreads}
           selectedConversationId={activeThreadId}
+          currentUserId={currentUserId}
           onSelect={(threadId) => selectThread(threadId, CHAT_SIDEBAR_SECTION.DIRECT)}
+          userAvatarUrls={userAvatarUrls}
           onRequestHideThread={openHideDialog}
           onRequestClearMyMessages={openClearDialog}
           hidingThreadId={
@@ -1421,7 +1472,9 @@ export default function ChatPage() {
         <ConversationList
           conversations={visibleGroupThreads}
           selectedConversationId={activeThreadId}
+          currentUserId={currentUserId}
           onSelect={(threadId) => selectThread(threadId, CHAT_SIDEBAR_SECTION.GROUP)}
+          userAvatarUrls={userAvatarUrls}
           onRequestLeaveGroup={openLeaveGroupDialog}
           leavingGroupThreadId={
             leaveGroupMutation.isPending
@@ -1593,8 +1646,10 @@ export default function ChatPage() {
         conversationId={selectedThread.id}
         currentUserId={currentUserId}
         conversationTitle={selectedThreadTitle || "이름 없는 대화"}
+        conversationAvatarUrl={selectedThreadAvatarUrl}
         conversationType={selectedThread.type}
         userDisplayNames={userDisplayNames}
+        userAvatarUrls={userAvatarUrls}
         onBack={clearSelectedThread}
         onRequestHideThread={
           selectedThreadType === CHAT_THREAD_TYPE.DIRECT ? openHideDialog : undefined
@@ -1628,8 +1683,10 @@ export default function ChatPage() {
         conversationId={selectedThread.id}
         currentUserId={currentUserId}
         conversationTitle={selectedThreadTitle || "이름 없는 대화"}
+        conversationAvatarUrl={selectedThreadAvatarUrl}
         conversationType={selectedThread.type}
         userDisplayNames={userDisplayNames}
+        userAvatarUrls={userAvatarUrls}
         onRequestHideThread={
           selectedThreadType === CHAT_THREAD_TYPE.DIRECT ? openHideDialog : undefined
         }
