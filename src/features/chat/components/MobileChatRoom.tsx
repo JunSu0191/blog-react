@@ -8,8 +8,10 @@ import {
   SendHorizontal,
   Trash2,
   UserPlus,
+  Users,
 } from "lucide-react";
 import { ActionDialog, Button, UserAvatar } from "@/shared/ui";
+import ConversationMembersPanel from "./ConversationMembersPanel";
 import { useChatRoomController, type ChatRoomBaseProps } from "./useChatRoomController";
 
 export default function MobileChatRoom({
@@ -17,6 +19,8 @@ export default function MobileChatRoom({
   currentUserId,
   conversationTitle,
   conversationAvatarUrl,
+  conversationParticipantCount,
+  conversationMembers,
   conversationType,
   userDisplayNames,
   userAvatarUrls,
@@ -30,6 +34,7 @@ export default function MobileChatRoom({
   isClearingMyMessages = false,
 }: ChatRoomBaseProps) {
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isMembersPanelOpen, setIsMembersPanelOpen] = useState(false);
   const {
     listRef,
     composerRef,
@@ -59,6 +64,10 @@ export default function MobileChatRoom({
     isGroupConversation ||
     Boolean(onRequestHideThread) ||
     Boolean(onRequestClearMyMessages);
+  const participantCount =
+    typeof conversationParticipantCount === "number" && conversationParticipantCount > 0
+      ? conversationParticipantCount
+      : conversationMembers?.length;
 
   const handleMobileMenuAction = (action: () => void) => {
     setIsActionMenuOpen(false);
@@ -95,6 +104,18 @@ export default function MobileChatRoom({
             >
               <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
               <div className="space-y-2">
+                {isGroupConversation && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleMobileMenuAction(() => setIsMembersPanelOpen(true))
+                    }
+                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <Users className="h-4 w-4" aria-hidden="true" />
+                    참여자 보기
+                  </button>
+                )}
                 {isGroupConversation && onRequestInviteMembers && (
                   <button
                     type="button"
@@ -188,9 +209,18 @@ export default function MobileChatRoom({
               <p className="line-clamp-1 text-sm font-bold text-slate-900 dark:text-slate-100">
                 {conversationTitle || "이름 없는 대화방"}
               </p>
-              <p className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                {conversationMetaLabel}
-              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                <span>{conversationMetaLabel}</span>
+                {isGroupConversation && typeof participantCount === "number" && participantCount > 0 ? (
+                  <>
+                    <span aria-hidden="true">•</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                      {participantCount}명
+                    </span>
+                  </>
+                ) : null}
+              </div>
             </div>
           </div>
           {hasConversationMenu ? (
@@ -359,6 +389,14 @@ export default function MobileChatRoom({
       </div>
 
       <ActionDialog {...noticeDialogProps} />
+      <ConversationMembersPanel
+        open={isMembersPanelOpen}
+        onOpenChange={setIsMembersPanelOpen}
+        isMobile
+        title={conversationTitle || "참여자"}
+        participantCount={participantCount}
+        members={conversationMembers || []}
+      />
       {mobileConversationMenu}
     </div>
   );

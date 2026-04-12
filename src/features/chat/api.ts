@@ -325,12 +325,24 @@ function normalizeThread(raw: unknown, fallbackType?: ChatThreadType): ChatThrea
   const participantListFromParticipants = normalizeParticipantList(obj.participants);
   const participantListFromMembers = normalizeParticipantList(obj.members);
   const participantListFromUsers = normalizeParticipantList(obj.users);
+  const participantListFromGroupMembers = normalizeParticipantList(obj.groupMembers);
+  const participantListFromMemberSummaries = normalizeParticipantList(obj.memberSummaries);
+  const participantListFromParticipantSummaries = normalizeParticipantList(
+    obj.participantSummaries,
+  );
+  const participantListFromParticipantInfos = normalizeParticipantList(obj.participantInfos);
+  const participantListFromChatMembers = normalizeParticipantList(obj.chatMembers);
 
   const participantUserIds = uniqueNumbers([
     ...participantUserIdsFromFlat,
     ...participantListFromParticipants.participantUserIds,
     ...participantListFromMembers.participantUserIds,
     ...participantListFromUsers.participantUserIds,
+    ...participantListFromGroupMembers.participantUserIds,
+    ...participantListFromMemberSummaries.participantUserIds,
+    ...participantListFromParticipantSummaries.participantUserIds,
+    ...participantListFromParticipantInfos.participantUserIds,
+    ...participantListFromChatMembers.participantUserIds,
   ]);
 
   const participantNames = uniqueStrings([
@@ -338,6 +350,11 @@ function normalizeThread(raw: unknown, fallbackType?: ChatThreadType): ChatThrea
     ...participantListFromParticipants.participantNames,
     ...participantListFromMembers.participantNames,
     ...participantListFromUsers.participantNames,
+    ...participantListFromGroupMembers.participantNames,
+    ...participantListFromMemberSummaries.participantNames,
+    ...participantListFromParticipantSummaries.participantNames,
+    ...participantListFromParticipantInfos.participantNames,
+    ...participantListFromChatMembers.participantNames,
   ]);
 
   const rawType =

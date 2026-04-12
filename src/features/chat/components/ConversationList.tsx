@@ -30,6 +30,7 @@ type ConversationListProps = {
   clearingThreadId?: number;
   isLoading?: boolean;
   searchKeyword?: string;
+  userDisplayNames?: Record<number, string>;
   userAvatarUrls?: Record<number, string | undefined>;
   resurfacedThreadIds?: Set<number>;
   emptyTitle?: string;
@@ -90,13 +91,17 @@ export default function ConversationList({
   clearingThreadId,
   isLoading,
   searchKeyword = "",
+  userDisplayNames,
   userAvatarUrls,
   resurfacedThreadIds,
   emptyTitle = "대화방이 없습니다.",
   emptyDescription = "새 대화를 시작하면 여기에 최근 대화가 정리됩니다.",
 }: ConversationListProps) {
   const filteredConversations = conversations.filter((conversation) =>
-    matchesConversationSearch(conversation, searchKeyword),
+    matchesConversationSearch(conversation, searchKeyword, {
+      currentUserId,
+      userDisplayNames,
+    }),
   );
 
   if (isLoading) {
@@ -137,7 +142,10 @@ export default function ConversationList({
           typeof hidingThreadId === "number" ||
           typeof clearingThreadId === "number";
 
-        const displayMeta = resolveConversationDisplayMeta(conversation);
+        const displayMeta = resolveConversationDisplayMeta(conversation, {
+          currentUserId,
+          userDisplayNames,
+        });
         const unreadCountText = formatUnreadCount(
           conversation.unreadMessageCount ?? conversation.unreadCount,
         );
@@ -161,14 +169,21 @@ export default function ConversationList({
             <ContextMenuTrigger asChild>
               <div
                 className={[
-                  "flex items-center gap-2 border-l-2 pr-2 transition-colors duration-200",
+                  "relative flex items-center gap-2 pr-2 transition-colors duration-200",
                   isActive
-                    ? "border-l-blue-500 bg-blue-50/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:bg-blue-950/35 dark:shadow-none"
+                    ? "bg-blue-50/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:bg-blue-950/35 dark:shadow-none"
                     : hasUnread
-                      ? "border-l-transparent bg-slate-50/90 dark:bg-slate-900/80"
-                      : "border-l-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60",
+                      ? "bg-slate-50/90 dark:bg-slate-900/80"
+                      : "hover:bg-slate-50 dark:hover:bg-slate-800/60",
                 ].join(" ")}
               >
+                <span
+                  aria-hidden="true"
+                  className={[
+                    "absolute inset-y-2 left-0 w-1 rounded-r-full transition-colors duration-200",
+                    isActive ? "bg-blue-500" : "bg-transparent",
+                  ].join(" ")}
+                />
                 <button
                   type="button"
                   onClick={() => onSelect(conversation.id)}
@@ -190,7 +205,7 @@ export default function ConversationList({
                         {displayMeta.isGroup &&
                           typeof displayMeta.participantCount === "number" && (
                             <span className="shrink-0 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
-                              {displayMeta.participantCount}
+                              {displayMeta.participantCount}명
                             </span>
                           )}
                         {isResurfaced && (

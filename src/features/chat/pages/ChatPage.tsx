@@ -25,11 +25,14 @@ import {
   FRIEND_RELATION_STATUS,
   FRIEND_REQUEST_DIRECTION,
   type FriendRelationStatus,
+  type ChatThreadType,
 } from "../chat.enums";
 import ConversationList from "../components/ConversationList";
+import type { ConversationMemberSummary } from "../components/ConversationMembersPanel";
 import DesktopChatRoom from "../components/DesktopChatRoom";
 import MobileChatRoom from "../components/MobileChatRoom";
 import { canStartDirectChat } from "../chatPolicies";
+import { resolveConversationTitle } from "../conversationDisplay";
 import {
   useAcceptFriendRequest,
   useAcceptGroupInvite,
@@ -176,16 +179,23 @@ function userSearchableText(user: ChatUserLike) {
     .toLowerCase();
 }
 
-function extractThreadTitle(thread?: {
-  displayTitle?: string;
-  title?: string | null;
-}) {
+function extractThreadTitle(
+  thread:
+    | {
+        displayTitle?: string;
+        title?: string | null;
+        participantNames?: string[];
+        participantUserIds?: number[];
+        type?: ChatThreadType;
+      }
+    | undefined,
+  options?: {
+    currentUserId?: number;
+    userDisplayNames?: Record<number, string>;
+  },
+) {
   if (!thread) return "";
-  const displayTitle =
-    typeof thread.displayTitle === "string" ? thread.displayTitle.trim() : "";
-  if (displayTitle) return displayTitle;
-  const title = typeof thread.title === "string" ? thread.title.trim() : "";
-  return title || "이름 없는 대화방";
+  return resolveConversationTitle(thread, options);
 }
 
 export default function ChatPage() {
@@ -405,8 +415,6 @@ export default function ChatPage() {
   const selectedThread =
     typeof activeThreadId === "number" ? threadById[activeThreadId] : undefined;
 
-  const selectedThreadTitle = extractThreadTitle(selectedThread);
-
   const hideTargetThread =
     typeof hideTargetThreadId === "number"
       ? threadById[hideTargetThreadId]
@@ -453,13 +461,60 @@ export default function ChatPage() {
     });
   }, [acceptedFriends, inviteSearchKeyword, inviteTargetThread?.participantUserIds]);
 
+  const userDirectoryById = useMemo(() => {
+    const directory: Record<number, ChatUserLike> = {};
+    const register = (candidate?: ChatUserLike | null) => {
+      if (!candidate || typeof candidate.userId !== "number") return;
+      directory[candidate.userId] = {
+        ...directory[candidate.userId],
+        ...candidate,
+      };
+    };
+
+    register(
+      typeof currentUserId === "number"
+        ? {
+            userId: currentUserId,
+            username: user?.username,
+            nickname: user?.nickname,
+            name: user?.name,
+            avatarUrl: user?.avatarUrl,
+          }
+        : null,
+    );
+    chatUsers.forEach(register);
+    friends.forEach(register);
+    receivedRequests.forEach((request) => {
+      register(request.requester);
+      register(request.target);
+    });
+    sentRequests.forEach((request) => {
+      register(request.requester);
+      register(request.target);
+    });
+    pendingInvites.forEach((invite) => register(invite.inviter));
+
+    return directory;
+  }, [
+    chatUsers,
+    currentUserId,
+    friends,
+    pendingInvites,
+    receivedRequests,
+    sentRequests,
+    user?.avatarUrl,
+    user?.name,
+    user?.nickname,
+    user?.username,
+  ]);
+
   const userDisplayNames = useMemo(() => {
-    return chatUsers.reduce<Record<number, string>>((acc, chatUser) => {
+    return Object.values(userDirectoryById).reduce<Record<number, string>>((acc, chatUser) => {
       const label = userLabel(chatUser);
       if (label) acc[chatUser.userId] = label;
       return acc;
     }, {});
-  }, [chatUsers]);
+  }, [userDirectoryById]);
   const userAvatarUrls = useMemo(() => {
     const avatarMap: Record<number, string | undefined> = {};
     const register = (candidate?: ChatUserLike | null) => {
@@ -508,9 +563,81 @@ export default function ChatPage() {
     if (typeof otherParticipantId !== "number") return undefined;
     return userAvatarUrls[otherParticipantId];
   }, [currentUserId, selectedThread, userAvatarUrls]);
+  const selectedThreadTitle = useMemo(() => {
+    return extractThreadTitle(selectedThread, {
+      currentUserId,
+      userDisplayNames,
+    });
+  }, [currentUserId, selectedThread, userDisplayNames]);
+  const selectedThreadMembers = useMemo<ConversationMemberSummary[]>(() => {
+    if (!selectedThread) return [];
 
-  const hideTargetThreadTitle = extractThreadTitle(hideTargetThread);
-  const leaveTargetThreadTitle = extractThreadTitle(leaveTargetThread);
+    const membersById = new Map<number, ConversationMemberSummary>();
+    const currentUserLabel =
+      typeof currentUserId === "number"
+        ? resolveDisplayName(
+            {
+              username: user?.username,
+              nickname: user?.nickname,
+              name: user?.name,
+            },
+            "나",
+          )
+        : "나";
+
+    (selectedThread.participantUserIds || []).forEach((participantUserId) => {
+      const isCurrentUser = participantUserId === currentUserId;
+      const memberSource = userDirectoryById[participantUserId];
+      const memberName = isCurrentUser
+        ? currentUserLabel
+        : memberSource
+          ? userLabel(memberSource)
+          : userDisplayNames[participantUserId] || "알 수 없음";
+
+      membersById.set(participantUserId, {
+        userId: participantUserId,
+        name: memberName,
+        subLabel: isCurrentUser ? "나" : userSubLabel(memberSource ?? { userId: participantUserId }),
+        avatarUrl:
+          participantUserId === currentUserId
+            ? user?.avatarUrl
+            : userAvatarUrls[participantUserId],
+        isCurrentUser,
+      });
+    });
+
+    const members = Array.from(membersById.values());
+    const fallbackMembers = (selectedThread.participantNames || [])
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0)
+      .filter((name) => !members.some((member) => member.name === name))
+      .map((name) => ({ name }));
+
+    return [...members, ...fallbackMembers];
+  }, [
+    currentUserId,
+    selectedThread,
+    user?.avatarUrl,
+    user?.name,
+    user?.nickname,
+    user?.username,
+    userDirectoryById,
+    userAvatarUrls,
+    userDisplayNames,
+  ]);
+  const selectedThreadParticipantCount =
+    selectedThreadMembers.length > 0
+      ? selectedThreadMembers.length
+      : selectedThread?.participantCount;
+
+  const hideTargetThreadTitle = extractThreadTitle(hideTargetThread, {
+    currentUserId,
+    userDisplayNames,
+  });
+  const leaveTargetThreadTitle = extractThreadTitle(leaveTargetThread, {
+    currentUserId,
+    userDisplayNames,
+  });
 
   useEffect(() => {
     if (typeof currentUserId !== "number") return;
@@ -1378,6 +1505,7 @@ export default function ChatPage() {
           selectedConversationId={activeThreadId}
           currentUserId={currentUserId}
           onSelect={(threadId) => selectThread(threadId, CHAT_SIDEBAR_SECTION.DIRECT)}
+          userDisplayNames={userDisplayNames}
           userAvatarUrls={userAvatarUrls}
           onRequestHideThread={openHideDialog}
           onRequestClearMyMessages={openClearDialog}
@@ -1412,7 +1540,10 @@ export default function ChatPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="line-clamp-1 text-xs font-semibold text-slate-700 dark:text-slate-200">
-                      {extractThreadTitle(thread)}
+                      {extractThreadTitle(thread, {
+                        currentUserId,
+                        userDisplayNames,
+                      })}
                     </p>
                     <Button
                       type="button"
@@ -1474,6 +1605,7 @@ export default function ChatPage() {
           selectedConversationId={activeThreadId}
           currentUserId={currentUserId}
           onSelect={(threadId) => selectThread(threadId, CHAT_SIDEBAR_SECTION.GROUP)}
+          userDisplayNames={userDisplayNames}
           userAvatarUrls={userAvatarUrls}
           onRequestLeaveGroup={openLeaveGroupDialog}
           leavingGroupThreadId={
@@ -1647,6 +1779,8 @@ export default function ChatPage() {
         currentUserId={currentUserId}
         conversationTitle={selectedThreadTitle || "이름 없는 대화"}
         conversationAvatarUrl={selectedThreadAvatarUrl}
+        conversationParticipantCount={selectedThreadParticipantCount}
+        conversationMembers={selectedThreadMembers}
         conversationType={selectedThread.type}
         userDisplayNames={userDisplayNames}
         userAvatarUrls={userAvatarUrls}
@@ -1684,6 +1818,8 @@ export default function ChatPage() {
         currentUserId={currentUserId}
         conversationTitle={selectedThreadTitle || "이름 없는 대화"}
         conversationAvatarUrl={selectedThreadAvatarUrl}
+        conversationParticipantCount={selectedThreadParticipantCount}
+        conversationMembers={selectedThreadMembers}
         conversationType={selectedThread.type}
         userDisplayNames={userDisplayNames}
         userAvatarUrls={userAvatarUrls}
@@ -2032,7 +2168,10 @@ export default function ChatPage() {
                     멤버 초대
                   </p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {extractThreadTitle(inviteTargetThread)}
+                    {extractThreadTitle(inviteTargetThread, {
+                      currentUserId,
+                      userDisplayNames,
+                    })}
                   </p>
                 </div>
                 <button
@@ -2144,10 +2283,12 @@ export default function ChatPage() {
         >
           <SurfaceCard
             padded="none"
-            className="overflow-hidden rounded-2xl border border-slate-200 bg-white/95 dark:border-slate-700 dark:bg-slate-900/95"
+            className="flex h-[calc(100dvh-9.5rem)] min-h-[540px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/95 dark:border-slate-700 dark:bg-slate-900/95 lg:h-[78vh]"
           >
             {sidebarHeader}
-            {sideSectionContent}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {sideSectionContent}
+            </div>
           </SurfaceCard>
 
           <div>{chatRoomPanel}</div>

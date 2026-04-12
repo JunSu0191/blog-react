@@ -9,6 +9,7 @@ import {
 import { CHAT_THREAD_TYPE } from "../chat.enums";
 import { toChatMessage, type ChatConversation, type ChatMessage } from "../api";
 import { useConversationMessages, useMarkConversationRead } from "../queries";
+import type { ConversationMemberSummary } from "./ConversationMembersPanel";
 
 type LocalMessage = ChatMessage & {
   localId: string;
@@ -20,6 +21,8 @@ export type ChatRoomBaseProps = {
   currentUserId?: number;
   conversationTitle?: string;
   conversationAvatarUrl?: string;
+  conversationParticipantCount?: number;
+  conversationMembers?: ConversationMemberSummary[];
   conversationType?: ChatConversation["type"];
   userDisplayNames?: Record<number, string>;
   userAvatarUrls?: Record<number, string | undefined>;

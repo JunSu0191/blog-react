@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   EllipsisVertical,
   EyeOff,
@@ -5,6 +6,7 @@ import {
   SendHorizontal,
   Trash2,
   UserPlus,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -14,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui";
 import { ActionDialog, Button, UserAvatar } from "@/shared/ui";
+import ConversationMembersPanel from "./ConversationMembersPanel";
 import type { ChatRoomBaseProps } from "./useChatRoomController";
 import { useChatRoomController } from "./useChatRoomController";
 
@@ -22,6 +25,8 @@ export default function DesktopChatRoom({
   currentUserId,
   conversationTitle,
   conversationAvatarUrl,
+  conversationParticipantCount,
+  conversationMembers,
   conversationType,
   userDisplayNames,
   userAvatarUrls,
@@ -34,6 +39,8 @@ export default function DesktopChatRoom({
   isClearingMyMessages = false,
   className,
 }: ChatRoomBaseProps) {
+  const [isConversationMenuOpen, setIsConversationMenuOpen] = useState(false);
+  const [isMembersPanelOpen, setIsMembersPanelOpen] = useState(false);
   const {
     listRef,
     composerRef,
@@ -63,6 +70,14 @@ export default function DesktopChatRoom({
     isGroupConversation ||
     Boolean(onRequestHideThread) ||
     Boolean(onRequestClearMyMessages);
+  const participantCount =
+    typeof conversationParticipantCount === "number" && conversationParticipantCount > 0
+      ? conversationParticipantCount
+      : conversationMembers?.length;
+  const runMenuAction = (action: () => void) => {
+    setIsConversationMenuOpen(false);
+    window.setTimeout(action, 0);
+  };
 
   return (
     <div
@@ -85,14 +100,26 @@ export default function DesktopChatRoom({
               <p className="line-clamp-1 text-sm font-bold text-slate-900 dark:text-slate-100">
                 {conversationTitle || "이름 없는 대화방"}
               </p>
-              <p className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                {conversationMetaLabel}
-              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                <span>{conversationMetaLabel}</span>
+                {isGroupConversation && typeof participantCount === "number" && participantCount > 0 ? (
+                  <>
+                    <span aria-hidden="true">•</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                      {participantCount}명
+                    </span>
+                  </>
+                ) : null}
+              </div>
             </div>
           </div>
 
           {hasConversationMenu ? (
-            <DropdownMenu>
+            <DropdownMenu
+              open={isConversationMenuOpen}
+              onOpenChange={setIsConversationMenuOpen}
+            >
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
@@ -103,11 +130,22 @@ export default function DesktopChatRoom({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={8} className="w-52">
+                {isGroupConversation && (
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      runMenuAction(() => setIsMembersPanelOpen(true));
+                    }}
+                  >
+                    <Users className="h-4 w-4" aria-hidden="true" />
+                    참여자 보기
+                  </DropdownMenuItem>
+                )}
                 {isGroupConversation && onRequestInviteMembers && (
                   <DropdownMenuItem
                     onSelect={(event) => {
                       event.preventDefault();
-                      onRequestInviteMembers(conversationId);
+                      runMenuAction(() => onRequestInviteMembers(conversationId));
                     }}
                   >
                     <UserPlus className="h-4 w-4" aria-hidden="true" />
@@ -119,7 +157,7 @@ export default function DesktopChatRoom({
                     disabled={isHidingThread}
                     onSelect={(event) => {
                       event.preventDefault();
-                      onRequestHideThread(conversationId);
+                      runMenuAction(() => onRequestHideThread(conversationId));
                     }}
                   >
                     <EyeOff className="h-4 w-4" aria-hidden="true" />
@@ -132,7 +170,7 @@ export default function DesktopChatRoom({
                     disabled={isClearingMyMessages}
                     onSelect={(event) => {
                       event.preventDefault();
-                      onRequestClearMyMessages(conversationId);
+                      runMenuAction(() => onRequestClearMyMessages(conversationId));
                     }}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -145,7 +183,7 @@ export default function DesktopChatRoom({
                     disabled={isLeavingGroup}
                     onSelect={(event) => {
                       event.preventDefault();
-                      onRequestLeaveGroup(conversationId);
+                      runMenuAction(() => onRequestLeaveGroup(conversationId));
                     }}
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" />
@@ -310,6 +348,14 @@ export default function DesktopChatRoom({
       </div>
 
       <ActionDialog {...noticeDialogProps} />
+      <ConversationMembersPanel
+        open={isMembersPanelOpen}
+        onOpenChange={setIsMembersPanelOpen}
+        isMobile={false}
+        title={conversationTitle || "참여자"}
+        participantCount={participantCount}
+        members={conversationMembers || []}
+      />
     </div>
   );
 }
