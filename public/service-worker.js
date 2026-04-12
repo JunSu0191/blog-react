@@ -54,11 +54,11 @@ self.addEventListener("push", (event) => {
       icon:
         typeof payload.icon === "string" && payload.icon.trim().length > 0
           ? payload.icon.trim()
-          : "/favicon.svg",
+          : "/blog-pause-icon-tight.png",
       badge:
         typeof payload.badge === "string" && payload.badge.trim().length > 0
           ? payload.badge.trim()
-          : "/favicon.svg",
+          : "/blog-pause-icon-tight.png",
       data: {
         linkUrl,
         type: payload.type,

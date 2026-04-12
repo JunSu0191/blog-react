@@ -335,21 +335,14 @@ export default function Layout({
         >
           <Link
             to="/home"
-            className="group flex min-w-0 items-center gap-3"
+            className="group flex min-w-0 items-center"
           >
-            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-[0_16px_34px_-20px_rgba(37,99,235,0.95)] ring-1 ring-blue-400/30 transition group-hover:scale-[1.03] dark:ring-blue-300/25">
-              <img
-                src="/favicon.svg"
-                alt="Blog Pause 아이콘"
-                className="h-full w-full object-cover"
-              />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-base font-black tracking-tight text-slate-900 dark:text-slate-100">
-                Blog Pause
+            <span className="inline-flex shrink-0 items-baseline gap-2 whitespace-nowrap transition group-hover:scale-[1.02]">
+              <span className="text-[1.6rem] font-light tracking-[-0.06em] text-slate-700 sm:text-[1.95rem] dark:text-slate-200">
+                Blog
               </span>
-              <span className="hidden truncate text-[11px] font-medium text-slate-500 lg:block dark:text-slate-400">
-                발견하고 기록하고, 바로 대화하는 블로그
+              <span className="bg-[linear-gradient(135deg,#2f6bff_0%,#4338ca_55%,#1d4ed8_100%)] bg-clip-text text-[1.8rem] font-black tracking-[-0.08em] text-transparent sm:text-[2.15rem]">
+                Pause
               </span>
             </span>
           </Link>
