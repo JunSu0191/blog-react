@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Bell,
   Compass,
@@ -15,7 +15,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { Avatar, AvatarFallback, Badge } from "@/components/ui";
+import { Badge } from "@/components/ui";
 import {
   CommandDialog,
   CommandEmpty,
@@ -27,7 +27,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { useAuthContext } from "../shared/context/useAuthContext";
-import { ActionDialog, Button, ThemeToggle } from "../shared/ui";
+import { ActionDialog, Button, ThemeToggle, UserAvatar } from "../shared/ui";
 import { preloadCreateFlow } from "./routePreload";
 import { usePostFeed } from "@/features/post/queries";
 import { resolvePostPath } from "@/features/post/utils/postContent";
@@ -40,6 +40,7 @@ import {
   NotificationBell,
   NotificationRealtimeBridge,
 } from "@/features/notifications";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { resolveDisplayName } from "@/shared/lib/displayName";
 
 interface MenuItem {
@@ -148,6 +149,10 @@ const mobileBottomTabs: MobileBottomTab[] = [
   },
 ];
 
+const MOBILE_HEADER_TOP_REVEAL_OFFSET = 24;
+const MOBILE_HEADER_HIDE_OFFSET = 72;
+const MOBILE_HEADER_MIN_DELTA = 8;
+
 function formatSpotlightDate(value?: string) {
   if (!value) return "";
   const parsed = new Date(value);
@@ -162,6 +167,7 @@ export default function Layout({
   children,
   menuItems = defaultMenuItems,
 }: LayoutProps) {
+  const isMobile = useIsMobile();
   const { logout, token, user, isLoadingUser } = useAuthContext();
   const isAuthenticated = Boolean(user);
   const isRestoringSession = Boolean(token) && !user && isLoadingUser;
@@ -177,7 +183,6 @@ export default function Layout({
     const username = typeof user?.username === "string" ? user.username.trim() : "";
     return username ? `/${encodeURIComponent(username)}` : "/login";
   }, [user]);
-  const userInitial = userDisplayName.slice(0, 1).toUpperCase() || "U";
   const isMobileChatConversationOpen =
     isAuthenticated &&
     location.pathname === "/chat" &&
@@ -192,8 +197,12 @@ export default function Layout({
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const [authIntentPath, setAuthIntentPath] = useState<string>("/home");
+  const [isMobileHeaderHidden, setIsMobileHeaderHidden] = useState(false);
   const normalizedSpotlightKeyword = spotlightSearchKeyword.trim();
   const currentPathWithSearchHash = `${location.pathname}${location.search}${location.hash}`;
+  const lastScrollYRef = useRef(0);
+  const scrollFrameRef = useRef<number | null>(null);
+  const shouldHideMobileChatChrome = isMobileChatConversationOpen;
 
   const spotlightSearchQuery = usePostFeed(
     {
@@ -269,6 +278,62 @@ export default function Layout({
     };
   }, [openSpotlightSearch]);
 
+  useEffect(() => {
+    setIsMobileHeaderHidden(false);
+    lastScrollYRef.current = 0;
+    if (typeof window !== "undefined") {
+      lastScrollYRef.current = window.scrollY;
+    }
+  }, [location.key]);
+
+  useEffect(() => {
+    if (!isMobile || shouldHideMobileChatChrome || typeof window === "undefined") {
+      setIsMobileHeaderHidden(false);
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+      return;
+    }
+
+    lastScrollYRef.current = window.scrollY;
+
+    const updateHeaderVisibility = () => {
+      scrollFrameRef.current = null;
+
+      const nextScrollY = window.scrollY;
+      const delta = nextScrollY - lastScrollYRef.current;
+
+      if (Math.abs(delta) < MOBILE_HEADER_MIN_DELTA) {
+        return;
+      }
+
+      if (nextScrollY <= MOBILE_HEADER_TOP_REVEAL_OFFSET) {
+        setIsMobileHeaderHidden(false);
+      } else if (delta > 0 && nextScrollY >= MOBILE_HEADER_HIDE_OFFSET) {
+        setIsMobileHeaderHidden(true);
+      } else if (delta < 0) {
+        setIsMobileHeaderHidden(false);
+      }
+
+      lastScrollYRef.current = nextScrollY;
+    };
+
+    const onScroll = () => {
+      if (scrollFrameRef.current !== null) return;
+      scrollFrameRef.current = window.requestAnimationFrame(updateHeaderVisibility);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+    };
+  }, [isMobile, shouldHideMobileChatChrome]);
+
   const unreadChatCount = isAuthenticated ? chatUnreadCount : 0;
   const isAdminUser = user?.role?.toUpperCase() === "ADMIN";
   const resolvedMenuItems = useMemo(() => {
@@ -304,7 +369,6 @@ export default function Layout({
   };
 
   const shouldRenderMobileBottomNav = true;
-  const shouldHideMobileChatChrome = isMobileChatConversationOpen;
   const shouldUseRouteEnter = location.pathname !== "/chat";
   const visibleMobileBottomTabs = useMemo(
     () =>
@@ -321,11 +385,14 @@ export default function Layout({
       {isAuthenticated ? <ChatUnreadRealtimeBridge /> : null}
 
       <header
+        data-testid="mobile-top-header"
         className={[
-          "sticky top-0 z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur-xl transition-[opacity,transform] duration-200 ease-out dark:border-slate-800/90 dark:bg-slate-950/80",
+          "fixed inset-x-0 top-0 z-50 border-b border-slate-200/80 bg-white/85 backdrop-blur-xl transition-[opacity,transform] duration-300 ease-out dark:border-slate-800/90 dark:bg-slate-950/80 md:sticky md:top-0",
           shouldHideMobileChatChrome
             ? "pointer-events-none invisible h-0 -translate-y-1 overflow-hidden border-b-0 opacity-0 lg:pointer-events-auto lg:visible lg:h-auto lg:translate-y-0 lg:overflow-visible lg:border-b lg:opacity-100"
-            : "translate-y-0 opacity-100",
+            : isMobileHeaderHidden
+              ? "pointer-events-none -translate-y-full opacity-0 md:pointer-events-auto md:translate-y-0 md:opacity-100"
+              : "translate-y-0 opacity-100",
         ].join(" ")}
       >
         <div
@@ -337,11 +404,11 @@ export default function Layout({
             to="/home"
             className="group flex min-w-0 items-center"
           >
-            <span className="inline-flex shrink-0 items-baseline gap-2 whitespace-nowrap transition group-hover:scale-[1.02]">
-              <span className="text-[1.6rem] font-light tracking-[-0.06em] text-slate-700 sm:text-[1.95rem] dark:text-slate-200">
+            <span className="inline-flex shrink-0 items-baseline gap-2 whitespace-nowrap pr-1 transition group-hover:scale-[1.02]">
+              <span className="text-[1.6rem] font-light leading-none tracking-[-0.06em] text-slate-700 sm:text-[1.95rem] dark:text-slate-200">
                 Blog
               </span>
-              <span className="bg-[linear-gradient(135deg,#2f6bff_0%,#4338ca_55%,#1d4ed8_100%)] bg-clip-text text-[1.8rem] font-black tracking-[-0.08em] text-transparent sm:text-[2.15rem]">
+              <span className="bg-[linear-gradient(135deg,#2f6bff_0%,#4338ca_55%,#1d4ed8_100%)] bg-clip-text text-[1.8rem] font-black leading-none tracking-[-0.05em] text-transparent sm:text-[2.15rem]">
                 Pause
               </span>
             </span>
@@ -436,11 +503,13 @@ export default function Layout({
                   to="/mypage"
                   className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 sm:flex"
                 >
-                  <Avatar className="h-6 w-6 border border-blue-200/80 dark:border-blue-900/50">
-                    <AvatarFallback className="bg-blue-600 text-[11px] font-bold text-white">
-                      {userInitial}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar
+                    name={userDisplayName}
+                    imageUrl={user?.avatarUrl}
+                    alt={`${userDisplayName} 아바타`}
+                    className="h-6 w-6 border border-blue-200/80 dark:border-blue-900/50"
+                    fallbackClassName="text-[11px] font-bold"
+                  />
                   <span className="max-w-[10rem] truncate">
                     {userDisplayName}
                   </span>
@@ -495,11 +564,13 @@ export default function Layout({
               <>
                 <NotificationBell />
                 <Link to="/mypage" aria-label="마이페이지 이동">
-                  <Avatar className="h-8 w-8 border border-blue-200/80 dark:border-blue-900/50">
-                    <AvatarFallback className="bg-blue-600 text-[11px] font-semibold text-white">
-                      {userInitial}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar
+                    name={userDisplayName}
+                    imageUrl={user?.avatarUrl}
+                    alt={`${userDisplayName} 아바타`}
+                    className="h-8 w-8 border border-blue-200/80 dark:border-blue-900/50"
+                    fallbackClassName="text-[11px] font-semibold"
+                  />
                 </Link>
                 <Button
                   type="button"
@@ -541,7 +612,7 @@ export default function Layout({
           "w-full",
           shouldHideMobileChatChrome
             ? "px-0 pt-0 pb-0 md:mx-auto md:max-w-7xl md:px-6 md:pt-6 md:pb-6 lg:px-8"
-            : "mx-auto max-w-7xl px-4 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 md:pb-6 lg:px-8",
+            : "mx-auto max-w-7xl px-4 pt-[calc(4rem+1rem)] pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-[calc(4rem+1.5rem)] md:pt-6 md:pb-6 lg:px-8",
         ].join(" ")}
       >
         <div
